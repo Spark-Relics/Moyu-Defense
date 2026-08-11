@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { attachZombieModel } from '../systems/CharacterModelLoader.js';
 
 /**
  * 僵尸配置表
@@ -41,6 +42,11 @@ export class Zombie {
     this.stunFxTimer = 0;       // 眩晕星星动画计时
     this.bossNotified = false;  // Boss变暗是否已通知
     this.bossStepTimer = 0;     // Boss步距计时
+    this.overtimeTimer = 0;     // “全员996”移速增益
+    this._bossSkillTimer = 0;
+    this._bossSkillCooldown = 7 + Math.random() * 3;
+    this._bossCast = null;
+    this._phaseTwo = false;
 
     this.mesh = new THREE.Group();
     const start = new THREE.Vector3(grid.getSpawnX(), 0, grid.gridToWorld(row, 0).z);
@@ -150,6 +156,9 @@ export class Zombie {
 
     // 甲方名牌(挂外层mesh,始终朝镜头)
     if (this._clientNamePlatePending) this._makeClientNamePlate();
+
+    const fallbackParts = [...this.model.children];
+    attachZombieModel(this, fallbackParts);
   }
 
   // 甲方·需求之王：黑色高定西装+金边眼镜+阿玛尼领带+手举合同+金表+傲慢表情
@@ -659,6 +668,14 @@ export class Zombie {
   update(dt, game) {
     this.aliveTime += dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;
+    if (this.overtimeTimer > 0) this.overtimeTimer = Math.max(0, this.overtimeTimer - dt);
+    if (this.modelMixer && this.stunned <= 0 && !this._bossCast) {
+      this.modelMixer.timeScale = this.attacking ? 0.55 : (this.overtimeTimer > 0 ? 1.45 : 1);
+      this.modelMixer.update(dt);
+    } else if (this.characterVisual && !this.modelMixer) {
+      this.characterVisual.position.y = Math.sin(performance.now() * 0.003 + this.row) * 0.018;
+      this.characterVisual.rotation.z = Math.sin(performance.now() * 0.0025 + this.row) * 0.014;
+    }
 
     // 眩晕状态：不动不攻击，只播放眩晕动画
     if (this.stunned > 0) {
@@ -679,6 +696,16 @@ export class Zombie {
       return;
     }
     this.stunGroup.visible = false;
+
+    // 最终Boss施法期间停下脚步，给玩家一个清晰的换鱼锤打断窗口。
+    if (this.type === 'traitor' && this._bossCast) {
+      this._updateBossCast(dt, game);
+      const flash = this.hitFlash > 0;
+      for (const m of this.mainMaterials) m.emissive.setHex(flash ? 0x661111 : (this._phaseTwo ? 0x330000 : 0x000000));
+      this._updateHpBar();
+      if (this.hp <= 0) this._die(game);
+      return;
+    }
     this.walkPhase += dt * (this.attacking ? 2 : 8);
 
     // 寻找前方阻挡的植物(同行右侧)
@@ -712,7 +739,7 @@ export class Zombie {
 
     // 受击染色(遍历所有主体材质)
     const flash = this.hitFlash > 0;
-    for (const m of this.mainMaterials) m.emissive.setHex(flash ? 0x661111 : 0x000000);
+    for (const m of this.mainMaterials) m.emissive.setHex(flash ? 0x661111 : (this._phaseTwo ? 0x330000 : 0x000000));
 
     // 瞳孔轻微缩放(模拟眼神变化)
     const glow = 0.7 + Math.sin(performance.now() * 0.008) * 0.3;
@@ -776,6 +803,7 @@ export class Zombie {
 
   move(dt, game) {
     let v = this.speed;
+    if (this.overtimeTimer > 0) v *= 1.55;
     // 甲方后退
     if (this.revertTimer > 0) {
       this.revertTimer -= dt;
@@ -889,6 +917,22 @@ export class Zombie {
       if (game.onBossSpawn) game.onBossSpawn(); // 触发全屏变暗
       game.ui.toast('😈 终极Boss大老板降临！全场变暗，向日葵们开始动摇…');
     }
+
+    if (!this._phaseTwo && this.hp <= this.maxHp * 0.5) {
+      this._phaseTwo = true;
+      this.speed = this.baseSpeed * 1.25;
+      this._bossSkillCooldown = Math.max(4.5, this._bossSkillCooldown * 0.8);
+      game.ui.showBossWarning('⚠️ 二阶段！大老板墨镜碎裂，技能蓄力加快！');
+      game.ui.toast('🔥 大老板进入二阶段：移动更快、施法更频繁');
+      game.audio.play('basehit');
+    }
+
+    this._bossSkillTimer += dt;
+    if (this._bossSkillTimer >= this._bossSkillCooldown) {
+      this._startBossCast(game);
+      return;
+    }
+
     this._traitorActionTimer += dt;
     // 策反间隔至少10秒，避免过快
     const interval = this._traitorInterval || 10;
@@ -917,6 +961,93 @@ export class Zombie {
     z.mesh.position.x = pos.x;
     z.mesh.position.z = pos.z;
     game.zombies.push(z);
+  }
+
+  _startBossCast(game) {
+    const skills = [
+      { id: 'layoff', label: '❗ 裁员大棒 ❗', duration: this._phaseTwo ? 1.45 : 1.8, color: 0xff3030 },
+      { id: 'overtime', label: '❗ 全员996 ❗', duration: this._phaseTwo ? 0.8 : 1.0, color: 0x49a8ff },
+      { id: 'pie', label: '❗ 画饼充饥 ❗', duration: this._phaseTwo ? 2.0 : 2.5, color: 0xffc533 },
+    ];
+    const skill = skills[Math.floor(Math.random() * skills.length)];
+    this._bossCast = { ...skill, elapsed: 0 };
+    this._bossSkillTimer = 0;
+
+    if (!this._chargeRing) {
+      this._chargeRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.9, 0.09, 8, 48),
+        new THREE.MeshBasicMaterial({ color: skill.color, transparent: true, opacity: 0.9, depthWrite: false })
+      );
+      this._chargeRing.rotation.x = Math.PI / 2;
+      this._chargeRing.position.y = 0.08;
+      this.mesh.add(this._chargeRing);
+    }
+    this._chargeRing.material.color.setHex(skill.color);
+    this._chargeRing.visible = true;
+    this._chargeRing.scale.setScalar(0.25);
+    game.ui.showBossSkill(skill.label, skill.duration);
+    game.audio.play('basehit');
+  }
+
+  _updateBossCast(dt, game) {
+    const cast = this._bossCast;
+    if (!cast) return;
+    cast.elapsed += dt;
+    const progress = Math.min(1, cast.elapsed / cast.duration);
+    if (this._chargeRing) {
+      const scale = 0.25 + progress * 1.15;
+      this._chargeRing.scale.setScalar(scale);
+      this._chargeRing.rotation.z += dt * (3 + progress * 5);
+      this._chargeRing.material.opacity = 0.45 + progress * 0.55;
+    }
+    this.mesh.rotation.z = Math.sin(progress * Math.PI) * (cast.id === 'layoff' ? -0.18 : 0.1);
+    if (cast.elapsed < cast.duration) return;
+
+    if (this._chargeRing) this._chargeRing.visible = false;
+    this.mesh.rotation.z = 0;
+    this._bossCast = null;
+    this._bossSkillCooldown = this._phaseTwo ? 6 : 8;
+    game.ui.hideBossSkill();
+
+    if (cast.id === 'layoff') {
+      const targets = game.plants.filter((p) => !p.dead && p.row === this.row)
+        .sort((a, b) => a.mesh.position.x - b.mesh.position.x)
+        .slice(0, 2);
+      for (const plant of targets) plant.takeDamage(260);
+      game.ui.flashRed();
+      game.ui.toast(targets.length ? '💥 裁员大棒落下！本行前排植物受到重创' : '💥 裁员大棒砸空了！');
+    } else if (cast.id === 'overtime') {
+      for (const zombie of game.zombies) if (!zombie.dead) zombie.overtimeTimer = Math.max(zombie.overtimeTimer || 0, 6);
+      game.ui.toast('📱 全员996！所有僵尸加速6秒');
+    } else {
+      let hits = 0;
+      for (const row of [this.row - 1, this.row, this.row + 1]) {
+        const target = game.plants.filter((p) => !p.dead && p.row === row)
+          .sort((a, b) => a.mesh.position.x - b.mesh.position.x)[0];
+        if (!target) continue;
+        target.takeDamage(120);
+        hits++;
+        const pos = target.mesh.position.clone(); pos.y += 1.6;
+        game.effects.spawnFloatText(game.grid.group, pos, '画饼!', '#ffd24a');
+      }
+      this.stunned = 3;
+      game.ui.toast(`🥞 画饼命中${hits}行；大老板用力过猛，破防3秒！`);
+    }
+    game.audio.play('basehit');
+  }
+
+  interruptBossCast(game) {
+    if (!this._bossCast) return false;
+    this._bossCast = null;
+    this._bossSkillTimer = 0;
+    this._bossSkillCooldown = 6;
+    if (this._chargeRing) this._chargeRing.visible = false;
+    this.mesh.rotation.z = 0;
+    this.stunned = Math.max(this.stunned, 3);
+    this.doubleDamage = true;
+    game.ui.hideBossSkill();
+    game.ui.toast('🔨 施法被打断！大老板破防3秒，受到双倍伤害');
+    return true;
   }
 
   takeDamage(d) {

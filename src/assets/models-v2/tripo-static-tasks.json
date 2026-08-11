@@ -1,0 +1,26 @@
+[
+  {
+    "name": "wallnut",
+    "taskId": "6c48a42d-c07b-42e1-8fee-73e078abab1c",
+    "status": "success",
+    "progress": 100
+  },
+  {
+    "name": "peashooter",
+    "taskId": "8ca57163-dfa4-42c5-a74c-e3bd9305728b",
+    "status": "success",
+    "progress": 100
+  },
+  {
+    "name": "client",
+    "taskId": "6fe8430d-3ea6-4e12-8859-6df7a0398c56",
+    "status": "success",
+    "progress": 100
+  },
+  {
+    "name": "auditor",
+    "taskId": "28f9dc20-1e62-4c9b-8ba1-eb8eb1611506",
+    "status": "success",
+    "progress": 100
+  }
+]

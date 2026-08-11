@@ -68,10 +68,15 @@ export class ItemSystem {
 
   /** 换鱼锤：自动投掷砸向最前排僵尸，定身3秒+伤害翻倍+额外伤害 */
   hammer(game) {
-    // 找最前排(最靠近工位)的活僵尸
-    const alive = game.zombies.filter((z) => !z.dead).sort((a, b) => b.mesh.position.x - a.mesh.position.x);
+    // Boss蓄力时优先打断；否则砸最靠近工位的活僵尸。
+    const alive = game.zombies.filter((z) => !z.dead).sort((a, b) => {
+      const aCasting = a._bossCast ? 1 : 0;
+      const bCasting = b._bossCast ? 1 : 0;
+      return bCasting - aCasting || b.mesh.position.x - a.mesh.position.x;
+    });
     if (alive.length === 0) { game.ui.toast('场上没有僵尸可砸！'); return false; }
     const target = alive[0];
+    const interrupted = target.interruptBossCast ? target.interruptBossCast(game) : false;
     target.stunned = 3;
     target.doubleDamage = true;
     target.takeDamage(60); // 锤子额外伤害
@@ -79,7 +84,7 @@ export class ItemSystem {
     const p = target.mesh.position.clone(); p.y += 1.5;
     game.effects.spawnFloatText(game.grid.group, p, '🔨改PPT!', '#ff8800');
     game.particles.spawnDeath(game.grid.group, target.mesh.position.clone());
-    game.ui.toast('🔨 换鱼锤砸中！僵尸定身3秒+受伤翻倍+60伤害');
+    if (!interrupted) game.ui.toast('🔨 换鱼锤砸中！僵尸定身3秒+受伤翻倍+60伤害');
     game.audio.play('plant');
     return true;
   }

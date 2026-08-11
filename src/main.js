@@ -15,6 +15,7 @@ import { LevelUI } from './ui/LevelUI.js';
 import { PLANT_TYPES } from './entities/Plant.js';
 import { createPlant } from './entities/PlantFactory.js';
 import { createZombie } from './entities/Zombie.js';
+import { preloadCharacterModels } from './systems/CharacterModelLoader.js';
 import { tweenManager } from './utils/Tween.js';
 import { GridDebugger } from './utils/GridDebugger.js';
 
@@ -31,6 +32,7 @@ export const CFG = {
 
 class Game {
   constructor() {
+    preloadCharacterModels();
     this.canvas = document.getElementById('game-canvas');
     this.running = false;
     this.clock = 0;
@@ -175,8 +177,19 @@ class Game {
     this._buildGameControls();
 
     window.addEventListener('keydown', (e) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (this.ui.dismissTopOverlay()) return;
+        if (this.selectedCard || this.hammerMode) this._cancelActiveTool();
+        else this._togglePause();
+        return;
+      }
+      if (e.key === ' ') { e.preventDefault(); this._togglePause(); return; }
+      if (this.ui.isInteractionBlocked()) return;
+      const cardType = this.ui.getCardTypeForHotkey(e.key);
+      if (cardType) { e.preventDefault(); this._onCardClick(cardType); return; }
       if (e.key === 'c' || e.key === 'C') this._cycleCamera();
-      if (e.key === ' ' || e.key === 'Escape') { e.preventDefault(); this._togglePause(); }
       if (e.key === '1') this._setSpeed(1);
       if (e.key === '2') this._setSpeed(2);
       if (e.key === '3') this._setSpeed(3);
@@ -304,7 +317,7 @@ class Game {
     this._camAnimating = true;
     this._camAnimStart = performance.now();
     this._updateCamButtons();
-    this.ui.toast(`视角: ${p.name}`);
+    this.ui?.toast(`视角: ${p.name}`);
   }
 
   /** 循环切换视角 */
@@ -325,6 +338,12 @@ class Game {
   /** 右键按下：开始拖拽 */
   _onOrbitDown(e) {
     if (e.button !== 2) return; // 右键
+    if (e.defaultPrevented) return;
+    if (this.selectedCard || this.hammerMode) {
+      e.preventDefault();
+      this._cancelActiveTool();
+      return;
+    }
     this._orbitActive = true;
     this._orbitPrevX = e.clientX;
     this._orbitPrevY = e.clientY;
@@ -434,6 +453,7 @@ class Game {
     // 先用空列表初始化，startLevel时会重新设置
     this.ui = new UIManager([]);
     this.ui.onCardClick = (type) => this._onCardClick(type);
+    this.ui.pauseOverlay.addEventListener('click', () => this._togglePause());
   }
 
   /** 根据关卡更新可用卡片 */
@@ -451,6 +471,11 @@ class Game {
   _onCardClick(type) {
     if (!this.running) return;
     const cfg = PLANT_TYPES[type];
+
+    if (this.selectedCard === type || (type === 'hammer' && this.hammerMode)) {
+      this._cancelActiveTool();
+      return;
+    }
 
     // 大招(消耗怨气值)
     if (cfg.isUlt) {
@@ -493,6 +518,16 @@ class Game {
     const plantCost = this.items.isUltMoyu() ? 0 : cfg.cost;
     if (plantCost > 0 && !this.resource.canAfford(plantCost)) { this.ui.toast('摸鱼值不足！'); return; }
     this.ui.selectCard(type); this.selectedCard = type;
+  }
+
+  _cancelActiveTool(showToast = true) {
+    const hadTool = Boolean(this.selectedCard || this.hammerMode);
+    this.selectedCard = null;
+    this.hammerMode = false;
+    this.ui.setHammerMode(false);
+    this.ui.clearSelection();
+    this.grid.clearPlacementPreview();
+    if (hadTool && showToast) this.ui.toast('已取消选择');
   }
 
   _setCD(type, cd) { this.cardCooldowns[type] = this.clock + cd; this.ui.setCardCooldown(type, this.clock + cd); }

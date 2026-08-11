@@ -64,6 +64,15 @@ export class InteractionSystem {
   _onPointerDown(e) {
     const g = this.game;
     if (!g.running) return;
+    if (e.defaultPrevented) return;
+    if (e.button === 2) {
+      if (g.selectedCard || g.hammerMode) {
+        e.preventDefault();
+        g._cancelActiveTool();
+      }
+      return;
+    }
+    if (e.button !== 0) return;
     this._setMouse(e);
 
     // ===== 种植模式：点击地块放置 =====
@@ -197,10 +206,16 @@ export class InteractionSystem {
       && g.clock >= (g.cardCooldowns[type] || 0)
       && (cost === 0 || g.resource.canAfford(cost));
     g.grid.showPlacementPreview(row, col, valid);
+    let label = '点击放置';
+    if (g.grid.isOccupied(row, col)) label = '该工位已占用';
+    else if (g.clock < (g.cardCooldowns[type] || 0)) label = '卡片冷却中';
+    else if (cost > 0 && !g.resource.canAfford(cost)) label = `还差 ${cost - g.resource.value} 摸鱼值`;
+    g.ui.showPlacementFeedback(e.clientX, e.clientY, valid, label);
   }
 
   _clearPlacementPreview() {
     this.game.grid.clearPlacementPreview();
+    this.game.ui.hidePlacementFeedback();
   }
 
   _findGhostFromObject(obj, ghosts) {

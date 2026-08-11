@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Plant } from './Plant.js';
+import { attachSunflowerModel } from '../systems/CharacterModelLoader.js';
 
 /**
  * 向日葵社畜：方头棕脸+黄色花瓣+深灰西装+红领带+工牌+汗滴
@@ -118,8 +119,13 @@ export class Sunflower extends Plant {
     this._part(new THREE.ConeGeometry(0.015, 0.035, 4), sweatMat, 0, 0.015, 0, sweat2, false);
     this.sweatDrops = [sweat1, sweat2];
 
-    // 旋转整个模型，让脸朝向僵尸来的方向(-x，即左侧)
-    this.mesh.rotation.y = -Math.PI / 2;
+    // 僵尸从棋盘右侧进入，角色正面朝向来敌方向(+x)。
+    this.mesh.rotation.y = Math.PI / 2;
+
+    // Keep the procedural version only as an async-load fallback. Once the
+    // authored GLB is ready it becomes the entire visible character.
+    const fallbackParts = [...this.mesh.children];
+    attachSunflowerModel(this, fallbackParts);
   }
 
   /** 辅助：创建网格 */
@@ -132,6 +138,8 @@ export class Sunflower extends Plant {
   }
 
   behavior(dt, game) {
+    if (this.modelMixer) this.modelMixer.update(dt);
+
     // 血量越低，越想摸鱼，产出越慢
     const baseHp = (game.cfg ? game.cfg.BASE_HP : 100);
     const hpRatio = Math.max(0.3, (game.baseHp || baseHp) / baseHp);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Plant } from './Plant.js';
 import { Projectile } from './Projectile.js';
+import { attachPlantModel } from '../systems/CharacterModelLoader.js';
 
 /**
  * 行政流程审批员：手持红色公章，发射"审批单"子弹。
@@ -77,6 +78,10 @@ export class Auditor extends Plant {
     stampBase.rotation.z = Math.PI / 2; stampBase.position.set(0.55, 0, 0); armGroup.add(stampBase);
     this.armGroup = armGroup;
     this.stamp = stamp;
+
+    this.mesh.rotation.y = Math.PI / 2;
+    const fallbackParts = [...this.mesh.children];
+    attachPlantModel(this, 'auditor', fallbackParts);
   }
 
   behavior(dt, game) {
@@ -90,6 +95,10 @@ export class Auditor extends Plant {
       }
     }
     this.body.position.x += (0 - this.body.position.x) * Math.min(1, dt * 10);
+    if (this.characterVisual) {
+      this.characterVisual.position.x += (0 - this.characterVisual.position.x) * Math.min(1, dt * 10);
+      this.characterVisual.rotation.z = Math.sin(performance.now() * 0.003) * 0.025;
+    }
     // 盖章动画：手臂下压后回弹
     if (this.armGroup) {
       const f = Math.max(0, this.muzzleFlash);
@@ -117,6 +126,7 @@ export class Auditor extends Plant {
     game.audio.play('shoot');
     // 盖章后坐力
     this.body.position.x = 0.1;
+    if (this.characterVisual) this.characterVisual.position.x = 0.1;
     this.muzzleFlash = 0.25;
   }
 }

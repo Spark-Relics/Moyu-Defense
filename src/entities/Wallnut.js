@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Plant } from './Plant.js';
+import { attachPlantModel } from '../systems/CharacterModelLoader.js';
 
 /**
  * 996坚果墙：圆胖坚果社畜，血量800，持续消耗摸鱼值，受伤出现裂纹+压扁+冒汗，重黑眼圈
@@ -75,6 +76,10 @@ export class Wallnut extends Plant {
     }
 
     this.drainTimer = 0;
+
+    this.mesh.rotation.y = Math.PI / 2;
+    const fallbackParts = [...this.mesh.children];
+    attachPlantModel(this, 'wallnut', fallbackParts);
   }
 
   update(dt, game) {
@@ -102,6 +107,11 @@ export class Wallnut extends Plant {
     const targetY = ratio < 0.33 ? Math.max(0.62, ratio * 2.2) : 1.12;
     this.body.scale.y += (targetY - this.body.scale.y) * Math.min(1, dt * 6);
     this.body.rotation.z = (1 - ratio) * 0.12 * Math.sin(performance.now() * 0.003);
+    if (this.characterVisual) {
+      const targetScaleY = ratio < 0.33 ? 0.78 : 1;
+      this.characterVisual.scale.y += (targetScaleY - this.characterVisual.scale.y) * Math.min(1, dt * 6);
+      this.characterVisual.rotation.z = (1 - ratio) * 0.11 * Math.sin(performance.now() * 0.003);
+    }
     const crackThresholds = [0.75, 0.6, 0.45, 0.3, 0.15];
     for (let i = 0; i < this.cracks.length; i++) {
       this.cracks[i].visible = ratio < crackThresholds[i];

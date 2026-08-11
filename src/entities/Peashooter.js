@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Plant } from './Plant.js';
 import { Projectile } from './Projectile.js';
+import { attachPlantModel } from '../systems/CharacterModelLoader.js';
 
 /**
  * PPT豌豆射手：疲惫社畜举激光笔，发射 Word 文档弹丸，伤害20，攻速1.4s；长按蓄力发射年终总结
@@ -90,9 +91,14 @@ export class Peashooter extends Plant {
     );
     this.muzzle.position.set(0.66, 0, 0); armGroup.add(this.muzzle);
     this.armGroup = armGroup;
+
+    this.mesh.rotation.y = Math.PI / 2;
+    const fallbackParts = [...this.mesh.children];
+    attachPlantModel(this, 'peashooter', fallbackParts);
   }
 
   behavior(dt, game) {
+    if (this.modelMixer) this.modelMixer.update(dt);
     const interval = this.cfg.fireInterval / (this.fireRateMul || 1);
     if (this.timer >= interval && !this.charging) {
       if (game.hasZombieAhead(this.row, this.mesh.position.x)) {
@@ -101,6 +107,7 @@ export class Peashooter extends Plant {
       }
     }
     this.body.position.x += (0 - this.body.position.x) * Math.min(1, dt * 10);
+    if (this.characterVisual) this.characterVisual.position.x += (0 - this.characterVisual.position.x) * Math.min(1, dt * 10);
     if (this.muzzle) {
       const f = Math.max(0, this.muzzleFlash);
       this.muzzle.material.emissiveIntensity = 0.25 + f * 5;
@@ -135,6 +142,7 @@ export class Peashooter extends Plant {
     }
     game.audio.play('shoot');
     this.body.position.x = big ? 0.15 : 0.08;
+    if (this.characterVisual) this.characterVisual.position.x = big ? 0.15 : 0.08;
     this.muzzleFlash = big ? 0.35 : 0.18;
   }
 

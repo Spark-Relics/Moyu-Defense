@@ -168,6 +168,7 @@ export class LevelSystem {
       const z = game._createZombie('traitor', row);
       z.maxHp = z.hp = Math.round(z.hp * 3);
       z.baseSpeed *= 1.5;
+      z.speed = z.baseSpeed;
       z._traitorInterval = 0.75; // 策反频率翻倍
       game.zombies.push(z);
       game.audio.play('spawn_traitor');

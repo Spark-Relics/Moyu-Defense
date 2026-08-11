@@ -422,6 +422,38 @@ body.hammer-mode #game-canvas { cursor: crosshair; }
   border: 1px solid rgba(247,201,72,.42); border-radius: 8px; padding: 14px;
   box-shadow: 0 14px 30px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.12);
 }
+
+#boss-skill-alert {
+  --cast-duration: 2s;
+  position: fixed;
+  left: 50%;
+  bottom: 20%;
+  z-index: 92;
+  width: min(420px, calc(100vw - 32px));
+  padding: 11px 16px 12px;
+  transform: translate(-50%, 18px) scale(.96);
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  color: #fff;
+  border: 1px solid rgba(255, 80, 55, .85);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(34, 8, 8, .94), rgba(10, 4, 4, .9));
+  box-shadow: 0 0 30px rgba(255, 45, 20, .3), inset 0 0 18px rgba(255, 70, 30, .12);
+  transition: opacity .16s ease, transform .16s ease;
+}
+#boss-skill-alert.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.boss-skill-name { font-size: clamp(18px, 2.2vw, 28px); font-weight: 900; letter-spacing: .12em; text-shadow: 0 2px 0 #68130b; }
+.boss-skill-hint { margin-top: 3px; color: #ffd5a0; font-size: 12px; }
+.boss-skill-meter { height: 5px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.14); }
+.boss-skill-meter i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #ffcf40, #ff392e); box-shadow: 0 0 10px #ff5a36; }
+#boss-skill-alert.show .boss-skill-meter i { animation: boss-cast-fill var(--cast-duration) linear forwards; }
+@keyframes boss-cast-fill { to { width: 100%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  #boss-skill-alert, #boss-skill-alert.show { transition: none; }
+  #boss-skill-alert.show .boss-skill-meter i { animation-timing-function: steps(10, end); }
+}
 .lm-showcase-title { font-family: 'Kenney Future Narrow', "Microsoft YaHei", sans-serif; font-size: 18px; color: #ffe08a; text-align: center; margin-bottom: 10px; text-shadow: 0 2px 3px rgba(0,0,0,.5); }
 .lm-showcase-art {
   height: 156px; border-radius: 8px; border: 1px solid rgba(255,224,138,.22);
@@ -657,4 +689,123 @@ body.hammer-mode #game-canvas { cursor: crosshair; }
   #niu-modal { left: 12px; right: 12px; top: 120px; width: auto; }
   .lr-box, .help-box { min-width: 0; width: calc(100vw - 28px); padding: 22px 18px; }
   #wave-banner { font-size: 34px; white-space: normal; width: calc(100vw - 32px); text-align: center; }
+}
+
+/* ============================================================
+   低遮挡战斗 HUD / 操作手感重构
+   ============================================================ */
+#ui-root::before {
+  background:
+    linear-gradient(180deg, rgba(5,8,7,.2) 0, transparent 18%, transparent 78%, rgba(5,8,7,.22) 100%),
+    radial-gradient(circle at 50% 48%, transparent 58%, rgba(5,8,7,.2) 100%);
+}
+#top-bar {
+  top: 12px; left: 14px; right: 14px; height: auto; padding: 0;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  background: none; border: 0; box-shadow: none; backdrop-filter: none; pointer-events: none;
+}
+.hud-cluster {
+  min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 7px 11px;
+  color: #fff; border: 1px solid rgba(247,201,72,.34); border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.07), transparent 38%), linear-gradient(180deg, rgba(49,39,27,.93), rgba(18,15,12,.9));
+  box-shadow: 0 10px 28px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.1);
+  backdrop-filter: blur(10px); pointer-events: auto;
+}
+.hud-primary { max-width: min(720px, 62vw); }
+.hud-combat { margin-left: auto; border-color: rgba(116,195,101,.34); }
+.stat-block { gap: 5px; white-space: nowrap; }
+.stat-icon { font-size: 14px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
+.stat-label { font-size: 11px; color: rgba(255,241,210,.66); }
+.stat-value { min-width: 22px; font-size: 19px; line-height: 1; }
+#level-title-block { padding: 7px 10px; }
+#level-title { font-size: 12px; }
+#base-hp-bar-bg { width: clamp(90px, 11vw, 145px); height: 12px; }
+#shield-value { color: #73d9ff; }
+#ticket-value { color: #d8b8ff; }
+#wave-display { color: #8effc1; }
+#enemy-count { color: #ff9b85; }
+#score-value { color: #76d6e8; }
+#rage-bar { top: 76px; right: 16px; padding: 6px 9px; border-radius: 10px; }
+.rage-bg { width: 76px; height: 9px; }
+
+#card-bar {
+  left: 16px; bottom: 14px; transform: none; justify-content: flex-start;
+  max-width: min(72vw, 920px); padding: 7px 9px; gap: 5px; border-radius: 12px;
+  scrollbar-width: thin; scrollbar-color: rgba(247,201,72,.48) transparent;
+}
+.card {
+  width: 68px; height: 84px; min-width: 68px; padding: 4px 3px;
+  appearance: none; font: inherit; text-align: center; outline: none; touch-action: manipulation;
+}
+.card:hover { transform: translateY(-4px); }
+.card:focus-visible { outline: 2px solid #9fffd0; outline-offset: 3px; }
+.card.selected { transform: translateY(-7px); filter: saturate(1.12) brightness(1.08); box-shadow: 0 0 0 2px #ffe08a, 0 12px 30px rgba(247,201,72,.45); }
+.card-icon { width: 42px; height: 36px; margin-top: 6px; }
+.card-name { font-size: 9px; margin-top: 3px; }
+.card-cost { font-size: 10px; padding: 2px 7px; }
+.card-hotkey {
+  position: absolute; left: 4px; top: 4px; z-index: 4; min-width: 17px; height: 17px; padding: 0 4px;
+  display: grid; place-items: center; color: #2a1a0a; background: #ffe08a;
+  border: 1px solid rgba(255,255,255,.72); border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,.45);
+  font-family: 'Kenney Future Narrow', sans-serif; font-size: 10px;
+}
+.card-sep { height: 66px; margin-block: 7px; }
+
+#placement-status {
+  position: absolute; left: 18px; bottom: 108px; z-index: 31; max-width: min(520px, calc(100vw - 36px));
+  display: flex; align-items: center; gap: 8px; padding: 8px 11px; color: rgba(255,247,222,.92);
+  background: rgba(16,25,20,.9); border: 1px solid rgba(142,255,193,.48); border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.28); backdrop-filter: blur(8px);
+  opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .14s ease, transform .14s ease; font-size: 12px;
+}
+#placement-status.show { opacity: 1; transform: translateY(0); }
+.ps-key { padding: 2px 6px; color: #fbe8b0; border: 1px solid rgba(251,232,176,.35); border-radius: 5px; background: rgba(255,255,255,.08); font-size: 10px; }
+#placement-cursor {
+  position: fixed; z-index: 45; display: none; padding: 5px 8px; border-radius: 7px;
+  color: white; background: rgba(8,12,10,.9); border: 1px solid currentColor;
+  box-shadow: 0 6px 18px rgba(0,0,0,.28); pointer-events: none; font-size: 11px; font-weight: 800; white-space: nowrap;
+}
+#placement-cursor.show { display: block; }
+#placement-cursor.valid { color: #98ffc4; }
+#placement-cursor.invalid { color: #ff9a8f; }
+body.placement-mode #game-canvas { cursor: crosshair; }
+
+#game-controls {
+  left: auto; right: 16px; bottom: 14px; flex-direction: row; align-items: center;
+  gap: 5px; padding: 6px 7px; border-radius: 11px;
+}
+.gc-speed-row { gap: 3px; }
+.gc-btn { width: 32px; height: 28px; }
+.gc-speed { width: 29px; height: 25px; }
+#gc-info { min-width: 54px; margin: 0 0 0 3px; padding: 0 0 0 7px; border-top: 0; border-left: 1px solid rgba(255,255,255,.12); }
+#cam-switch { top: 76px; left: 16px; right: auto; display: flex; flex-direction: row; gap: 4px; padding: 5px; border-radius: 10px; }
+.cam-btn { min-width: 52px; padding: 6px 8px; font-size: 11px; }
+.cam-hint { display: none; }
+#help-btn { right: 18px; bottom: 58px; top: auto; }
+#toast { top: 78px; font-size: 14px; padding: 8px 16px; }
+#pause-overlay { cursor: pointer; }
+
+@media (max-width: 900px) {
+  #top-bar { top: 8px; left: 8px; right: 8px; gap: 6px; }
+  .hud-cluster { min-height: 45px; padding: 5px 7px; gap: 7px; }
+  .hud-primary { max-width: 68vw; overflow: hidden; }
+  #level-title-block, #score-block { display: none; }
+  .stat-label { display: none; }
+  #base-hp-bar-bg { width: 92px; }
+  .stat-value { font-size: 17px; }
+  .hud-combat { gap: 6px; }
+  #rage-bar { top: 61px; right: 8px; bottom: auto; }
+  #cam-switch { top: 61px; left: 8px; right: auto; bottom: auto; }
+  #card-bar { left: 8px; bottom: 8px; max-width: calc(100vw - 140px); }
+  .card { width: 60px; min-width: 60px; height: 76px; }
+  .card-icon { width: 38px; height: 31px; margin-top: 5px; }
+  .card-name { font-size: 8px; }
+  #placement-status { left: 10px; bottom: 94px; font-size: 11px; }
+  #game-controls { left: auto; right: 8px; bottom: 8px; }
+  #gc-info { display: none; }
+  #help-btn { right: 8px; bottom: 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, #placement-status, #toast { transition: none !important; }
+  .special-card, .wave-countdown.danger { animation: none !important; }
 }

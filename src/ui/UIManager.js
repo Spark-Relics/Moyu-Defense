@@ -25,39 +25,37 @@ export class UIManager {
     const top = document.createElement('div');
     top.id = 'top-bar';
     top.innerHTML = `
-      <div class="stat-block" id="level-title-block">
-        <span class="stat-label" id="level-title">第X关 · 关卡名</span>
+      <div class="hud-cluster hud-primary">
+        <div class="stat-block" id="level-title-block">
+          <span class="stat-label" id="level-title">第X关 · 关卡名</span>
+        </div>
+        <div class="stat-block stat-resource" title="用于种植和使用道具">
+          <span class="stat-icon">🐟</span><span class="stat-label">摸鱼</span>
+          <span class="stat-value" id="resource-value">50</span>
+        </div>
+        <div class="stat-block stat-health" title="归零则本关失败">
+          <span class="stat-label">工位</span>
+          <div id="base-hp-bar-bg"><div id="base-hp-bar"></div></div>
+        </div>
+        <div class="stat-block" id="shield-block" style="display:none">
+          <span class="stat-label">盾</span><span class="stat-value" id="shield-value">0</span>
+        </div>
+        <div class="stat-block stat-ticket" title="用于特殊消耗品">
+          <span class="stat-icon">🎫</span><span class="stat-value" id="ticket-value">0</span>
+        </div>
       </div>
-      <div class="stat-block">
-        <span class="stat-label">摸鱼值</span>
-        <span class="stat-value" id="resource-value">50</span>
-      </div>
-      <div class="stat-block">
-        <span class="stat-label">工位血量</span>
-        <div id="base-hp-bar-bg"><div id="base-hp-bar"></div></div>
-      </div>
-      <div class="stat-block" id="shield-block" style="display:none">
-        <span class="stat-label">护盾</span>
-        <span class="stat-value" id="shield-value" style="color:#66ccff">0</span>
-      </div>
-      <div class="stat-block">
-        <span class="stat-label">工时券</span>
-        <span class="stat-value" id="ticket-value" style="color:#c9a0ff">0</span>
-      </div>
-      <div class="stat-block" style="margin-left:auto">
-        <span class="stat-label">第</span>
-        <span class="stat-value" id="wave-display" style="color:#8effc1">0</span>
-        <span class="stat-label" id="wave-total">/0</span>
-        <span id="wave-countdown" class="wave-countdown ready">准备中</span>
-        <span class="stat-label">波</span>
-      </div>
-      <div class="stat-block" id="enemy-count-block">
-        <span class="stat-label">来袭</span>
-        <span class="stat-value" id="enemy-count" style="color:#ff8a80">0</span>
-      </div>
-      <div class="stat-block" id="score-block">
-        <span class="stat-label">得分</span>
-        <span class="stat-value" id="score-value" style="color:#66ccff">0</span>
+      <div class="hud-cluster hud-combat">
+        <div class="stat-block wave-stat">
+          <span class="stat-label">波次</span>
+          <span class="stat-value" id="wave-display">0</span><span class="stat-label" id="wave-total">/0</span>
+          <span id="wave-countdown" class="wave-countdown ready">准备中</span>
+        </div>
+        <div class="stat-block" id="enemy-count-block" title="当前场上敌人">
+          <span class="stat-label">来袭</span><span class="stat-value" id="enemy-count">0</span>
+        </div>
+        <div class="stat-block" id="score-block" title="本关得分">
+          <span class="stat-label">分</span><span class="stat-value" id="score-value">0</span>
+        </div>
       </div>`;
     root.appendChild(top);
 
@@ -72,10 +70,12 @@ export class UIManager {
     bar.id = 'card-bar';
     this.cardEls = {};
     for (const c of this.cardsConfig) {
-      const card = document.createElement('div');
+      const card = document.createElement('button');
+      card.type = 'button';
       const cls = c.isSpecial ? 'card special-card' : c.isUlt ? 'card ult-card' : c.isTicket ? 'card ticket-card' : c.isSkill ? 'card skill-card' : 'card';
       card.className = cls;
       card.dataset.type = c.type;
+      card.setAttribute('aria-label', `${c.name}，${this._formatCardCost(c)}`);
       let costText;
       if (c.isUlt) costText = '怒' + c.rageCost;
       else if (c.isTicket) costText = '\u{1F3AB}' + c.ticketCost;
@@ -101,6 +101,18 @@ export class UIManager {
       this.cardEls[c.type] = card;
     }
     root.appendChild(bar);
+    this._assignCardHotkeys();
+
+    const placementStatus = document.createElement('div');
+    placementStatus.id = 'placement-status';
+    placementStatus.innerHTML = '<span class="ps-key">Esc</span><span class="ps-copy">选择卡牌开始部署</span>';
+    root.appendChild(placementStatus);
+    this.placementStatus = placementStatus;
+
+    const placementCursor = document.createElement('div');
+    placementCursor.id = 'placement-cursor';
+    root.appendChild(placementCursor);
+    this.placementCursor = placementCursor;
 
     const cardTooltip = document.createElement('div');
     cardTooltip.id = 'card-tooltip';
@@ -352,10 +364,12 @@ export class UIManager {
         bar.appendChild(sep);
       }
 
-      const card = document.createElement('div');
+      const card = document.createElement('button');
+      card.type = 'button';
       const cls = c.isSpecial ? 'card special-card' : c.isUlt ? 'card ult-card' : c.isTicket ? 'card ticket-card' : c.isSkill ? 'card skill-card' : 'card';
       card.className = cls;
       card.dataset.type = c.type;
+      card.setAttribute('aria-label', `${c.name}，${this._formatCardCost(c)}`);
       let costText;
       if (c.isUlt) costText = '怒' + c.rageCost;
       else if (c.isTicket) costText = '\u{1F3AB}' + c.ticketCost;
@@ -379,6 +393,34 @@ export class UIManager {
       bar.appendChild(card);
       this.cardEls[c.type] = card;
     }
+    this._assignCardHotkeys();
+  }
+
+  _assignCardHotkeys() {
+    const keys = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F', 'Z', 'X', 'V', 'B'];
+    this.cardHotkeys = {};
+    Object.entries(this.cardEls).forEach(([type, card], index) => {
+      const key = keys[index];
+      if (!key) return;
+      this.cardHotkeys[key.toLowerCase()] = type;
+      const badge = document.createElement('span');
+      badge.className = 'card-hotkey';
+      badge.textContent = key;
+      card.appendChild(badge);
+      card.title = `${card.getAttribute('aria-label')} [${key}]`;
+    });
+  }
+
+  getCardTypeForHotkey(key) { return this.cardHotkeys?.[key.toLowerCase()] || null; }
+  isInteractionBlocked() {
+    return !this.helpOverlay?.classList.contains('hidden') || this.modal?.classList.contains('show');
+  }
+  dismissTopOverlay() {
+    if (this.helpOverlay && !this.helpOverlay.classList.contains('hidden')) {
+      this._toggleHelp();
+      return true;
+    }
+    return false;
   }
 
   /** 植物卡片拖拽开始：只显示图标作为拖拽图像 */
@@ -396,8 +438,30 @@ export class UIManager {
   selectCard(type) {
     this.selectedCard = type;
     for (const k in this.cardEls) this.cardEls[k].classList.toggle('selected', k === type);
+    const cfg = this.cardsConfig.find((card) => card.type === type) || PLANT_TYPES[type];
+    const isPlant = cfg && !cfg.isSkill && !cfg.isUlt && !cfg.isTicket;
+    document.body.classList.toggle('placement-mode', Boolean(isPlant));
+    if (this.placementStatus && cfg) {
+      const verb = isPlant ? '移动到草地，点击绿色格子放置' : '点击目标使用';
+      this.placementStatus.querySelector('.ps-copy').textContent = `${cfg.name} · ${verb} · 右键取消`;
+      this.placementStatus.classList.add('show');
+    }
   }
-  clearSelection() { this.selectedCard = null; for (const k in this.cardEls) this.cardEls[k].classList.remove('selected'); }
+  clearSelection() {
+    this.selectedCard = null;
+    for (const k in this.cardEls) this.cardEls[k].classList.remove('selected');
+    document.body.classList.remove('placement-mode');
+    if (this.placementStatus) this.placementStatus.classList.remove('show');
+    this.hidePlacementFeedback();
+  }
+  showPlacementFeedback(x, y, valid, text) {
+    if (!this.placementCursor) return;
+    this.placementCursor.textContent = text;
+    this.placementCursor.className = valid ? 'show valid' : 'show invalid';
+    this.placementCursor.style.left = `${Math.min(window.innerWidth - 130, x + 16)}px`;
+    this.placementCursor.style.top = `${Math.max(82, y - 34)}px`;
+  }
+  hidePlacementFeedback() { if (this.placementCursor) this.placementCursor.className = ''; }
   setCardCooldown(type, endTime) { this.cardCooldowns[type] = endTime; }
   setHammerMode(on) { this._hammerMode = on; document.body.classList.toggle('hammer-mode', on); this.cursorHint.style.display = on ? 'block' : 'none'; }
 
@@ -418,6 +482,24 @@ export class UIManager {
     banner.classList.add('show');
     clearTimeout(this._bossWarnTimer);
     this._bossWarnTimer = setTimeout(() => banner.classList.remove('show'), 3000);
+  }
+  showBossSkill(text, duration = 2) {
+    let alert = document.getElementById('boss-skill-alert');
+    if (!alert) {
+      alert = document.createElement('div');
+      alert.id = 'boss-skill-alert';
+      alert.innerHTML = '<div class="boss-skill-name"></div><div class="boss-skill-hint">换鱼锤可打断</div><div class="boss-skill-meter"><i></i></div>';
+      document.getElementById('ui-root').appendChild(alert);
+    }
+    alert.querySelector('.boss-skill-name').textContent = text;
+    alert.style.setProperty('--cast-duration', `${duration}s`);
+    alert.classList.remove('show');
+    void alert.offsetWidth;
+    alert.classList.add('show');
+  }
+  hideBossSkill() {
+    const alert = document.getElementById('boss-skill-alert');
+    if (alert) alert.classList.remove('show');
   }
   setBossDarken(on) { this.bossDarken.classList.toggle('show', on); }
   setShield(count) {

@@ -1,0 +1,79 @@
+[
+  {
+    "name": "wallnut",
+    "modelTaskId": "6c48a42d-c07b-42e1-8fee-73e078abab1c",
+    "checkTaskId": "65e805c5-ee0c-463b-b621-dff1b31452e4",
+    "status": "success",
+    "output": {
+      "riggable": false,
+      "rig_type": "biped",
+      "topology": "biped"
+    }
+  },
+  {
+    "name": "peashooter",
+    "modelTaskId": "8ca57163-dfa4-42c5-a74c-e3bd9305728b",
+    "checkTaskId": "35499e22-f52d-4af5-b2fa-1df017f2be08",
+    "status": "success",
+    "output": {
+      "riggable": true,
+      "rig_type": "biped",
+      "topology": "biped"
+    }
+  },
+  {
+    "name": "client",
+    "modelTaskId": "6fe8430d-3ea6-4e12-8859-6df7a0398c56",
+    "checkTaskId": "d2c79417-aaef-485c-93bb-314e02966e2c",
+    "status": "success",
+    "output": {
+      "riggable": true,
+      "rig_type": "biped",
+      "topology": "biped"
+    }
+  },
+  {
+    "name": "boss",
+    "modelTaskId": "9b6b00da-5051-459a-92bf-0d954c991822",
+    "checkTaskId": "7fff97b9-e324-4c4a-b6e9-b8e3217af7f5",
+    "status": "success",
+    "output": {
+      "riggable": false,
+      "rig_type": "biped",
+      "topology": "biped"
+    }
+  },
+  {
+    "name": "kpi",
+    "modelTaskId": "07d21cad-dcd2-4e39-9252-915ff8208d51",
+    "checkTaskId": "132fa168-f079-48cc-a968-43b5d2bbba01",
+    "status": "success",
+    "output": {
+      "riggable": true,
+      "rig_type": "biped",
+      "topology": "biped"
+    }
+  },
+  {
+    "name": "traitor",
+    "modelTaskId": "0489a0a0-a0cf-428f-9ff0-4da77d5469dd",
+    "checkTaskId": "a60a23c1-ddf4-4370-af95-cdd340cafd9e",
+    "status": "success",
+    "output": {
+      "riggable": false,
+      "rig_type": "biped",
+      "topology": "biped"
+    }
+  },
+  {
+    "name": "auditor",
+    "modelTaskId": "28f9dc20-1e62-4c9b-8ba1-eb8eb1611506",
+    "checkTaskId": "1d09853e-0f52-4d66-9c0a-f18de52ea46f",
+    "status": "success",
+    "output": {
+      "riggable": false,
+      "rig_type": "biped",
+      "topology": "biped"
+    }
+  }
+]
