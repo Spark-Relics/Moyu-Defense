@@ -89,6 +89,7 @@ async function attachCharacterModel(entity, type, fallbackParts, parent) {
     const scale = characterSources[type].height / Math.max(size.y, 0.001);
     asset.scale.setScalar(scale);
     asset.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+    console.debug(`[charModel] ${type} rawH=${size.y.toFixed(3)} targetH=${characterSources[type].height} scale=${scale.toFixed(3)} minY=${bounds.min.y.toFixed(3)} ground=${(-bounds.min.y * scale).toFixed(3)}`);
 
     const visual = new THREE.Group();
     visual.name = `${type}-tripo-visual`;

@@ -69,28 +69,32 @@ export class LevelUI {
 
   _renderGrid() {
     this.grid.innerHTML = '';
+    const nextId = Math.min(this.levelSystem.maxUnlocked, LEVELS.length);
     for (const lv of LEVELS) {
       const locked = !this.levelSystem.isUnlocked(lv.id);
+      const isNext = !locked && lv.id === nextId;
       const card = document.createElement('button');
       card.type = 'button';
-      card.className = 'lm-card' + (locked ? ' locked' : '');
+      card.className = 'lm-card' + (locked ? ' locked' : '') + (isNext ? ' next' : '');
       card.disabled = locked;
       card.setAttribute('aria-label', locked
         ? `第 ${lv.id} 关 ${lv.name}，尚未解锁`
         : `开始第 ${lv.id} 关：${lv.name}`);
       const threat = this._levelThreat(lv);
+      const threatClass = { '入门': 'easy', '紧张': 'mid', '高压': 'hard' }[threat.label] || 'easy';
       card.innerHTML = `
-        <div class="lm-card-icon">${String(lv.id).padStart(2, '0')}</div>
-        <div class="lm-card-main"><div class="lm-card-num">${locked ? 'LOCKED' : `第 ${lv.id} 关`}</div>
+        <div class="lm-card-top"><div class="lm-card-icon">${String(lv.id).padStart(2, '0')}</div><div class="lm-card-arrow">${locked ? '🔒' : '→'}</div></div>
+        <div class="lm-card-main">
+        <div class="lm-card-num">${locked ? 'LOCKED' : `第 ${lv.id} 关`}</div>
         <div class="lm-card-name">${lv.name}</div>
         <div class="lm-card-desc">${locked ? '通关上一关解锁' : lv.desc}</div></div>
-        <div class="lm-card-arrow">${locked ? '×' : '→'}</div>
         <div class="lm-card-meta">
-          <span>${lv.waves.length} 波</span>
-          <span>${locked ? '未解锁' : threat.label}</span>
+          <span class="lm-chip lm-chip-wave">${lv.waves.length} 波</span>
+          <span class="lm-chip threat-${threatClass}">${locked ? '未解锁' : threat.label}</span>
         </div>
         ${locked ? '' : `<div class="lm-card-enemies">${this._levelEnemiesHtml(lv)}</div>`}
-        ${locked ? '' : `<div class="lm-card-reward">${lv.unlocks?.length ? `解锁 ${lv.unlocks.map((t) => this._itemName(t)).join(' · ')}` : '最终考核'}</div>`}`;
+        ${locked ? '' : `<div class="lm-card-reward">${lv.unlocks?.length ? `🔓 解锁 ${lv.unlocks.map((t) => this._itemName(t)).join(' · ')}` : '🏆 最终考核'}</div>`}
+        ${isNext ? '<div class="lm-card-badge">当前进度</div>' : ''}`;
       if (!locked) {
         card.addEventListener('click', () => {
           if (this.onStartLevel) this.onStartLevel(lv.id);

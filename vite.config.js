@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 // ===== 关卡解锁开关 =====
 // true  = 所有关卡全部解锁(测试/演示用)
 // false = 按通关进度逐关解锁(默认)
-const UNLOCK_ALL_LEVELS = true;
+const UNLOCK_ALL_LEVELS = false;
 
 export default defineConfig({
   base: './',
