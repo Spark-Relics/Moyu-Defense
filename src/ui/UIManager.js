@@ -631,15 +631,34 @@ export class UIManager {
     document.getElementById('niu-title').textContent = event.title;
     const opts = document.getElementById('niu-options'); opts.innerHTML = '';
     event.options.forEach((o, i) => {
-      const el = document.createElement('div'); el.className = 'niu-option';
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'niu-option';
       el.textContent = `${String.fromCharCode(65 + i)}. ${o.text}`;
       el.addEventListener('click', () => { if (this.niuOnChoose) { const cb = this.niuOnChoose; this.niuOnChoose = null; cb(i); } });
       opts.appendChild(el);
     });
     this.modal.classList.add('show');
+    opts.querySelector('button')?.focus({ preventScroll: true });
   }
   hideNiuEvent() { this.modal.classList.remove('show'); this.niuOnChoose = null; }
   isNiuActive() { return this.modal.classList.contains('show'); }
+
+  showRendererStatus(title, detail) {
+    if (!this.rendererStatus) {
+      const status = document.createElement('div');
+      status.id = 'renderer-status';
+      status.setAttribute('role', 'alert');
+      status.innerHTML = '<div class="renderer-status-box"><strong></strong><span></span></div>';
+      document.getElementById('ui-root').appendChild(status);
+      this.rendererStatus = status;
+    }
+    this.rendererStatus.querySelector('strong').textContent = title;
+    this.rendererStatus.querySelector('span').textContent = detail;
+    this.rendererStatus.classList.add('show');
+  }
+
+  hideRendererStatus() { this.rendererStatus?.classList.remove('show'); }
 
   showOverlay(result) {
     this.overlay.classList.remove('hidden');

@@ -54,7 +54,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #14100c;
   width: 34px; height: 30px; border-radius: 6px; border: 1px solid rgba(247,201,72,.28);
   background: linear-gradient(180deg, rgba(86,70,44,.88), rgba(35,29,21,.92)); color: rgba(255,241,210,.78); font-size: 12px; font-weight: 800;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: all .15s;
+  transition: all .15s; font-family: inherit; padding: 0;
 }
 .gc-btn:hover { border-color: var(--ui-gold); color: var(--ui-gold); background: linear-gradient(180deg, rgba(112,83,38,.95), rgba(51,39,23,.95)); }
 .gc-btn.active { border-color: var(--ui-gold); color: var(--ui-ink); background: #f2b735 url('./assets/vendor/kenney-ui-pack/png/button-square-yellow.png') center/100% 100% no-repeat; box-shadow: 0 0 14px rgba(247,201,72,.35); }
@@ -234,6 +234,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #14100c;
 .niu-option {
   background: rgba(24,18,12,.62); border: 1px solid rgba(247,201,72,.24); border-radius: 7px;
   padding: 10px 12px; cursor: pointer; color: #fff; font-size: 13px; transition: all .15s;
+  width: 100%; font-family: inherit; text-align: left;
 }
 .niu-option:hover { background: rgba(92,66,30,.86); border-color: rgba(247,201,72,.72); transform: translateX(3px); }
 .niu-timer { text-align: center; margin-top: 10px; color: #ff8a80; font-size: 12px; font-weight: 700; }
@@ -392,7 +393,7 @@ body.hammer-mode #game-canvas { cursor: crosshair; }
   width: 34px; height: 28px; border-radius: 5px; border: 1px solid rgba(247,201,72,.22);
   background: rgba(24,18,12,.68); color: rgba(255,241,218,.62); font-size: 9px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: all .15s;
+  transition: all .15s; padding: 0; font-family: inherit;
 }
 .cam-btn:hover { border-color: var(--ui-gold); color: var(--ui-gold); background: rgba(86,61,25,.86); }
 .cam-btn.active { border-color: var(--ui-gold); color: var(--ui-ink); background: linear-gradient(180deg, #ffe08a, #c9801f); box-shadow: 0 0 10px rgba(247,201,72,.3); }
@@ -479,6 +480,7 @@ body.hammer-mode #game-canvas { cursor: crosshair; }
   cursor: pointer; color: #fff; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   min-height: 214px; box-shadow: 0 14px 30px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.12);
+  width: 100%; font-family: inherit;
 }
 .lm-card:hover { transform: translateY(-5px); border-color: rgba(255,224,138,.78); box-shadow: 0 20px 34px rgba(0,0,0,.42), 0 0 24px rgba(247,201,72,.22); }
 .lm-card:hover::before { content: ''; position: absolute; width: 22px; height: 22px; right: 8px; top: 8px; background: url('./assets/vendor/kenney-ui-pack/png/star-yellow.png') center/contain no-repeat; filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
@@ -585,7 +587,26 @@ body.hammer-mode #game-canvas { cursor: crosshair; }
   display: flex; align-items: center; justify-content: center; opacity: 0;
   transition: opacity .3s;
 }
-#pause-overlay.show { opacity: 1; }
+#pause-overlay.show { opacity: 1; pointer-events: auto; }
+
+#renderer-status {
+  position: absolute; inset: 0; z-index: 120; display: grid; place-items: center;
+  padding: 24px; background: rgba(5, 7, 10, .78); backdrop-filter: blur(8px);
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+#renderer-status.show { opacity: 1; pointer-events: auto; }
+.renderer-status-box {
+  width: min(420px, calc(100vw - 32px)); padding: 22px 24px; text-align: center;
+  color: rgba(255,241,218,.88); background: linear-gradient(180deg, rgba(74,54,32,.98), rgba(20,15,10,.99));
+  border: 1px solid rgba(247,201,72,.5); border-radius: 10px; box-shadow: var(--ui-shadow);
+}
+.renderer-status-box strong { display: block; color: #ffe08a; font-size: 22px; margin-bottom: 8px; }
+.renderer-status-box span { display: block; font-size: 13px; line-height: 1.6; }
+
+:where(button, [role="button"]):focus-visible {
+  outline: 3px solid #8fe7ff;
+  outline-offset: 3px;
+}
 #pause-overlay .pause-text {
   font-size: 52px; font-weight: 900; color: #ffd34d;
   text-shadow: 0 0 30px rgba(255,211,77,.5);

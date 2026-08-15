@@ -31,20 +31,29 @@ export class LevelUI {
       '只要不背锅，(markdown)就是好员工',
     ];
     menu.innerHTML = `
-      <h1 class="lm-title">🌵 植物大战僵尸：牛马版</h1>
-      <p class="lm-subtitle">${taunts[Math.floor(Math.random() * taunts.length)]}</p>
-      <div class="lm-shell">
-        <div class="lm-showcase" aria-hidden="true">
-          <div class="lm-showcase-title">今日工位防线</div>
-          <div class="lm-showcase-art"></div>
-          <div class="lm-showcase-row">
-            <div class="lm-unit lm-unit-plant"></div>
-            <div class="lm-vs">VS</div>
-            <div class="lm-unit lm-unit-zombie"></div>
+      <div class="lm-topline">
+        <span class="lm-kicker">NIUMA DEFENSE / 06</span>
+        <span class="lm-status"><i></i> 工位系统在线</span>
+      </div>
+      <div class="lm-layout">
+        <section class="lm-hero">
+          <div class="lm-hero-overline">办公室生存档案 · 2026</div>
+          <h1 class="lm-title">植物大战僵尸<br><em>牛马版</em></h1>
+          <p class="lm-subtitle">${taunts[Math.floor(Math.random() * taunts.length)]}</p>
+          <div class="lm-hero-rule"></div>
+          <div class="lm-brief">
+            <span class="lm-brief-label">今日任务</span>
+            <strong>守住工位，熬到下班</strong>
+            <small>部署牛马植物，处理突发需求，别让甲方越过防线。</small>
           </div>
-        </div>
-        <div class="lm-grid" id="lm-grid"></div>
-      </div>`;
+          <div class="lm-hero-meta"><span>9 × 5 防线</span><span>实时波次</span><span>低多边形 3D</span></div>
+        </section>
+        <section class="lm-route" aria-label="关卡路线">
+          <div class="lm-route-head"><div><span class="lm-route-kicker">防线档案</span><h2>选择关卡</h2></div><span class="lm-route-count">01—06</span></div>
+          <div class="lm-grid" id="lm-grid"></div>
+        </section>
+      </div>
+      <div class="lm-footer"><span>拖拽卡牌部署植物</span><span>右键旋转视角</span><span>Esc 暂停 / 返回</span></div>`;
     root.appendChild(menu);
     this.menu = menu;
     this.grid = menu.querySelector('#lm-grid');
@@ -62,21 +71,25 @@ export class LevelUI {
     this.grid.innerHTML = '';
     for (const lv of LEVELS) {
       const locked = lv.id > this.levelSystem.maxUnlocked;
-      const card = document.createElement('div');
+      const card = document.createElement('button');
+      card.type = 'button';
       card.className = 'lm-card' + (locked ? ' locked' : '');
+      card.disabled = locked;
+      card.setAttribute('aria-label', locked
+        ? `第 ${lv.id} 关 ${lv.name}，尚未解锁`
+        : `开始第 ${lv.id} 关：${lv.name}`);
       const threat = this._levelThreat(lv);
       card.innerHTML = `
-        <div class="lm-card-icon">${locked ? '🔒' : lv.icon}</div>
-        <div class="lm-card-num">第 ${lv.id} 关</div>
+        <div class="lm-card-icon">${String(lv.id).padStart(2, '0')}</div>
+        <div class="lm-card-main"><div class="lm-card-num">${locked ? 'LOCKED' : `第 ${lv.id} 关`}</div>
         <div class="lm-card-name">${lv.name}</div>
-        <div class="lm-card-desc">${locked ? '通关上一关解锁' : lv.desc}</div>
+        <div class="lm-card-desc">${locked ? '通关上一关解锁' : lv.desc}</div></div>
+        <div class="lm-card-arrow">${locked ? '×' : '→'}</div>
         <div class="lm-card-meta">
           <span>${lv.waves.length} 波</span>
           <span>${locked ? '未解锁' : threat.label}</span>
         </div>
-        ${locked ? '' : `<div class="lm-card-enemies">${threat.enemies.map((e) => `<span>${e}</span>`).join('')}</div>`}
-        ${locked ? '' : this._levelUnlocksHtml(lv)}
-        ${locked ? '' : this._levelSpecialHtml(lv)}`;
+        ${locked ? '' : `<div class="lm-card-reward">${lv.unlocks?.length ? `解锁 ${lv.unlocks.map((t) => this._itemName(t)).join(' · ')}` : '最终考核'}</div>`}`;
       if (!locked) {
         card.addEventListener('click', () => {
           if (this.onStartLevel) this.onStartLevel(lv.id);

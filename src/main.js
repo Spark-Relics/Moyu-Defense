@@ -35,6 +35,8 @@ class Game {
     preloadCharacterModels();
     this.canvas = document.getElementById('game-canvas');
     this.running = false;
+    this._contextLost = false;
+    this._pausedBeforeContextLoss = false;
     this.clock = 0;
     this.lastT = 0;
     this.cfg = CFG;
@@ -121,6 +123,8 @@ class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.canvas.addEventListener('webglcontextlost', (event) => this._onContextLost(event), false);
+    this.canvas.addEventListener('webglcontextrestored', () => this._onContextRestored(), false);
     this.scene.add(new THREE.AmbientLight(0x606880, 1.1));
     const dir = new THREE.DirectionalLight(0xffffff, 1.3);
     dir.position.set(16, 28, 12); dir.castShadow = true;
@@ -203,9 +207,11 @@ class Game {
     container.id = 'cam-switch';
     const names = ['高俯视', '斜视角', '平视'];
     names.forEach((name, i) => {
-      const btn = document.createElement('div');
+      const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'cam-btn' + (i === 0 ? ' active' : '');
       btn.textContent = name;
+      btn.setAttribute('aria-pressed', String(i === 0));
       btn.addEventListener('click', () => {
         this._camIdx = i;
         this._animateToPreset(i);
@@ -226,11 +232,14 @@ class Game {
     container.id = 'game-controls';
 
     // 暂停按钮
-    const pauseBtn = document.createElement('div');
+    const pauseBtn = document.createElement('button');
+    pauseBtn.type = 'button';
     pauseBtn.className = 'gc-btn';
     pauseBtn.id = 'gc-pause';
     pauseBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
     pauseBtn.title = '暂停 [空格]';
+    pauseBtn.setAttribute('aria-label', '暂停游戏');
+    pauseBtn.setAttribute('aria-pressed', 'false');
     pauseBtn.addEventListener('click', () => this._togglePause());
     container.appendChild(pauseBtn);
 
@@ -238,10 +247,13 @@ class Game {
     const speedRow = document.createElement('div');
     speedRow.className = 'gc-speed-row';
     for (const spd of [1, 2, 3]) {
-      const btn = document.createElement('div');
+      const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'gc-btn gc-speed' + (spd === 1 ? ' active' : '');
       btn.id = 'gc-speed-' + spd;
       btn.textContent = spd + 'x';
+      btn.setAttribute('aria-label', `设置游戏速度为 ${spd} 倍`);
+      btn.setAttribute('aria-pressed', String(spd === 1));
       btn.addEventListener('click', () => this._setSpeed(spd));
       speedRow.appendChild(btn);
     }
@@ -257,15 +269,19 @@ class Game {
   }
 
   _togglePause() {
-    if (!this.running) return;
+    if (!this.running || this._contextLost) return;
     this.paused = !this.paused;
     this.ui.setPaused(this.paused);
     const btn = document.getElementById('gc-pause');
     if (this.paused) {
       btn.classList.add('paused');
+      btn.setAttribute('aria-label', '继续游戏');
+      btn.setAttribute('aria-pressed', 'true');
       btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>';
     } else {
       btn.classList.remove('paused');
+      btn.setAttribute('aria-label', '暂停游戏');
+      btn.setAttribute('aria-pressed', 'false');
       btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
     }
   }
@@ -275,7 +291,10 @@ class Game {
     this.speedMul = spd;
     for (const s of [1, 2, 3]) {
       const btn = document.getElementById('gc-speed-' + s);
-      if (btn) btn.classList.toggle('active', s === spd);
+      if (btn) {
+        btn.classList.toggle('active', s === spd);
+        btn.setAttribute('aria-pressed', String(s === spd));
+      }
     }
     this.ui.toast('速度: ' + spd + 'x');
   }
@@ -288,7 +307,11 @@ class Game {
 
   /** 更新按钮选中状态 */
   _updateCamButtons() {
-    this._camButtons.forEach((btn, i) => btn.classList.toggle('active', i === this._camIdx));
+    this._camButtons.forEach((btn, i) => {
+      const active = i === this._camIdx;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
   }
 
   /** 平滑切换到指定预设 */
@@ -447,6 +470,27 @@ class Game {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  _onContextLost(event) {
+    event.preventDefault();
+    if (this._contextLost) return;
+    this._contextLost = true;
+    this._pausedBeforeContextLoss = this.paused;
+    this.paused = true;
+    this._orbitActive = false;
+    this.canvas.style.cursor = '';
+    this.ui?.showRendererStatus('显卡连接中断', '正在等待浏览器恢复 3D 画面，游戏进度已安全暂停…');
+  }
+
+  _onContextRestored() {
+    this._contextLost = false;
+    this._onResize();
+    this.paused = this._pausedBeforeContextLoss;
+    this.ui?.hideRendererStatus();
+    this.ui?.setPaused(this.paused);
+    this.ui?.toast('3D 画面已恢复');
+    this.lastT = performance.now();
   }
 
   _initUI() {
@@ -624,7 +668,7 @@ class Game {
       this._update(Math.min(subDt, 0.1));
     }
     tweenManager.update(dt);
-    this.renderer.render(this.scene, this.camera);
+    if (!this._contextLost) this.renderer.render(this.scene, this.camera);
   };
 
   _update(dt) {
