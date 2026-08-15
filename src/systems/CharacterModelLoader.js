@@ -4,10 +4,10 @@ import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.j
 
 const loader = new GLTFLoader();
 const characterSources = {
-  sunflower: { url: new URL('../assets/models-v2/sunflower-animated.glb', import.meta.url).href, height: 1.72 },
-  peashooter: { url: new URL('../assets/models-v2/peashooter-animated.glb', import.meta.url).href, height: 1.7 },
-  wallnut: { url: new URL('../assets/models-v2/wallnut.glb', import.meta.url).href, height: 1.48 },
-  auditor: { url: new URL('../assets/models-v2/auditor.glb', import.meta.url).href, height: 1.7 },
+  sunflower: { url: new URL('../assets/models-v2/sunflower-animated.glb', import.meta.url).href, height: 2.15 },
+  peashooter: { url: new URL('../assets/models-v2/peashooter-animated.glb', import.meta.url).href, height: 2.15 },
+  wallnut: { url: new URL('../assets/models-v2/wallnut.glb', import.meta.url).href, height: 2.7 },
+  auditor: { url: new URL('../assets/models-v2/auditor.glb', import.meta.url).href, height: 3.2 },
   client: { url: new URL('../assets/models-v2/client-animated.glb', import.meta.url).href, height: 2.18 },
   kpi: { url: new URL('../assets/models-v2/kpi-animated.glb', import.meta.url).href, height: 1.82 },
   boss: { url: new URL('../assets/models-v2/boss.glb', import.meta.url).href, height: 2.02 },
@@ -57,10 +57,11 @@ function cloneRuntimeScene(source) {
 }
 
 function getBindPoseBounds(asset) {
-  const characterMesh = asset.getObjectByProperty('isMesh', true);
-  const geometry = characterMesh?.geometry;
-  geometry?.computeBoundingBox();
-  return geometry?.boundingBox?.clone() || new THREE.Box3().setFromObject(asset, true);
+  // 整个角色(含全部子 mesh 与变换链)的世界包围盒。
+  // 不能只取第一个 mesh 的局部 geometry bbox：多部件模型(如审计员)
+  // 的首 mesh 可能是小物件/带变换，会导致缩放错误与悬空。
+  asset.updateMatrixWorld(true);
+  return new THREE.Box3().setFromObject(asset, true);
 }
 
 async function attachCharacterModel(entity, type, fallbackParts, parent) {
@@ -83,11 +84,11 @@ async function attachCharacterModel(entity, type, fallbackParts, parent) {
 
     const bounds = getBindPoseBounds(asset);
     const size = bounds.getSize(new THREE.Vector3());
+    // bounds 已是 asset 旋转后的世界系包围盒，center 无需再手动旋转
     const center = bounds.getCenter(new THREE.Vector3());
-    const rotatedCenter = center.clone().applyQuaternion(asset.quaternion);
     const scale = characterSources[type].height / Math.max(size.y, 0.001);
     asset.scale.setScalar(scale);
-    asset.position.set(-rotatedCenter.x * scale, -bounds.min.y * scale, -rotatedCenter.z * scale);
+    asset.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
 
     const visual = new THREE.Group();
     visual.name = `${type}-tripo-visual`;

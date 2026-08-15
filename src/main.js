@@ -574,7 +574,7 @@ class Game {
     if (hadTool && showToast) this.ui.toast('已取消选择');
   }
 
-  _setCD(type, cd) { this.cardCooldowns[type] = this.clock + cd; this.ui.setCardCooldown(type, this.clock + cd); }
+  _setCD(type, cd) { this.cardCooldowns[type] = this.clock + cd; this.ui.setCardCooldown(type, this.clock + cd, cd); }
 
   _useSkill(type) {
     if (type === 'hammer') return this.items.hammer(this) !== false;
@@ -630,7 +630,7 @@ class Game {
     this.ui.updateTickets(this.tickets); // 工时券跨关保留
     this.ui.showLevelInfo(level); // 显示关卡标题
     this.selectedCard = null; this.hammerMode = false;
-    this.cardCooldowns = {}; this.ui.cardCooldowns = {};
+    this.cardCooldowns = {}; this.ui.cardCooldowns = {}; this.ui.cardCdTotal = {};
     this.patrolWarning = 0; this.shieldCount = 0; this.bossCount = 0;
     this.moyuMul = 1; this.rage = 0;
     this.interaction.reset();

@@ -70,7 +70,7 @@ export class LevelUI {
   _renderGrid() {
     this.grid.innerHTML = '';
     for (const lv of LEVELS) {
-      const locked = lv.id > this.levelSystem.maxUnlocked;
+      const locked = !this.levelSystem.isUnlocked(lv.id);
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'lm-card' + (locked ? ' locked' : '');
@@ -89,6 +89,7 @@ export class LevelUI {
           <span>${lv.waves.length} 波</span>
           <span>${locked ? '未解锁' : threat.label}</span>
         </div>
+        ${locked ? '' : `<div class="lm-card-enemies">${this._levelEnemiesHtml(lv)}</div>`}
         ${locked ? '' : `<div class="lm-card-reward">${lv.unlocks?.length ? `解锁 ${lv.unlocks.map((t) => this._itemName(t)).join(' · ')}` : '最终考核'}</div>`}`;
       if (!locked) {
         card.addEventListener('click', () => {
@@ -97,6 +98,20 @@ export class LevelUI {
       }
       this.grid.appendChild(card);
     }
+  }
+
+  /** 关卡僵尸阵容汇总(跨波次各类型总数)，渲染为标签列表 */
+  _levelEnemiesHtml(level) {
+    const totals = new Map();
+    for (const wave of level.waves) {
+      for (const group of wave.zombies) {
+        totals.set(group.type, (totals.get(group.type) || 0) + (group.count || 1));
+      }
+    }
+    const icons = { client: '🕴️', kpi: '📊', boss: '🎩', traitor: '😈', super_traitor: '💀' };
+    return [...totals.entries()]
+      .map(([type, n]) => `<span title="${this._enemyName(type)}">${icons[type] || '🧟'} ${this._enemyName(type)} ×${n}</span>`)
+      .join('');
   }
 
   _levelThreat(level) {
@@ -152,7 +167,7 @@ export class LevelUI {
     if (old) old.remove();
 
     const isLastLevel = level.id >= LEVELS.length;
-    const canNext = !failed && !isLastLevel && level.id < maxUnlocked;
+    const canNext = !failed && !isLastLevel && this.levelSystem.isUnlocked(level.id + 1);
     const result = document.createElement('div');
     result.id = 'level-result';
 

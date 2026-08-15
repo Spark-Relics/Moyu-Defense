@@ -77,9 +77,12 @@ export class Wallnut extends Plant {
 
     this.drainTimer = 0;
 
-    this.mesh.rotation.y = Math.PI / 2;
+    this.mesh.rotation.y = -Math.PI / 2; // 面朝 -x 迎战左侧来袭的僵尸
     const fallbackParts = [...this.mesh.children];
-    attachPlantModel(this, 'wallnut', fallbackParts);
+    attachPlantModel(this, 'wallnut', fallbackParts).then((visual) => {
+      // GLB 不可用时同步放大程序化替身，观感与正式模型(高2.7)接近
+      if (!visual && !this.dead) this.mesh.scale.setScalar(2.1);
+    });
   }
 
   update(dt, game) {
@@ -129,7 +132,7 @@ export class Wallnut extends Plant {
 
   onEggClick(game) {
     this.invincible = 1;
-    const p = this.mesh.position.clone(); p.y += 1.8;
+    const p = this.mesh.position.clone(); p.y += 3.0;
     game.effects.spawnFloatText(game.grid.group, p, '福报！', '#ff5d6c');
     game.toast('996是福报！坚果墙无敌1秒');
     game.audio.play('plant');

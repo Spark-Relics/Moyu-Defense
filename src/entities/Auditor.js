@@ -63,8 +63,8 @@ export class Auditor extends Plant {
     const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.015, 0.03), darkMat);
     mouth.position.set(0, -0.14, 0.22); head.add(mouth);
 
-    // 手臂高举公章(朝 -x 方向，僵尸从左来袭)
-    const armGroup = new THREE.Group(); armGroup.position.set(-0.18, 0.18, 0.05); armGroup.rotation.y = Math.PI; this.body.add(armGroup);
+    // 手臂高举公章(沿身体正前+z，随容器转向 -x 指向僵尸)
+    const armGroup = new THREE.Group(); armGroup.position.set(-0.18, 0.18, 0.05); armGroup.rotation.y = Math.PI / 2; this.body.add(armGroup);
     const upperArm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.11, 0.11), suitMat);
     upperArm.position.set(0.15, 0, 0); upperArm.castShadow = true; armGroup.add(upperArm);
     const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), skinMat);
@@ -79,9 +79,12 @@ export class Auditor extends Plant {
     this.armGroup = armGroup;
     this.stamp = stamp;
 
-    this.mesh.rotation.y = Math.PI / 2;
+    this.mesh.rotation.y = -Math.PI / 2; // 面朝 -x 迎战左侧来袭的僵尸
     const fallbackParts = [...this.mesh.children];
-    attachPlantModel(this, 'auditor', fallbackParts);
+    attachPlantModel(this, 'auditor', fallbackParts).then((visual) => {
+      // GLB 不可用时同步放大程序化替身，观感与正式模型(高3.2)接近
+      if (!visual && !this.dead) this.mesh.scale.setScalar(1.85);
+    });
   }
 
   behavior(dt, game) {
@@ -115,7 +118,7 @@ export class Auditor extends Plant {
 
   _shoot(game) {
     const origin = this.mesh.position.clone();
-    origin.x -= 0.85; origin.y = 0.95;
+    origin.x -= 1.3; origin.y = 1.4;
     // 发射审批单弹丸(普通伤害+减速标记)
     const proj = new Projectile(game.grid.group, origin, this.cfg.damage * this.attackMul, 13, -1);
     proj.row = this.row;

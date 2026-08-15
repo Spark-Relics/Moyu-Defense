@@ -30,6 +30,11 @@ export class LevelSystem {
     try { localStorage.setItem('niuma_progress', String(this.maxUnlocked)); } catch (e) {}
   }
 
+  /** 指定关卡是否可选(vite.config.js 的 UNLOCK_ALL_LEVELS 为 true 时全解锁) */
+  isUnlocked(id) {
+    return __UNLOCK_ALL_LEVELS__ || id <= this.maxUnlocked;
+  }
+
   /** 获取当前关卡可用道具列表(含基础+解锁+特供) */
   getAvailableCards() {
     const items = getUnlockedItems(this.currentLevelId);

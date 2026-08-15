@@ -13,6 +13,7 @@ export class UIManager {
     this.selectedCard = null;
     this.onCardClick = null;
     this.cardCooldowns = {};
+    this.cardCdTotal = {};
     this.niuOnChoose = null;
     this.niuDecisionEnd = 0;
     this.build();
@@ -462,7 +463,7 @@ export class UIManager {
     this.placementCursor.style.top = `${Math.max(82, y - 34)}px`;
   }
   hidePlacementFeedback() { if (this.placementCursor) this.placementCursor.className = ''; }
-  setCardCooldown(type, endTime) { this.cardCooldowns[type] = endTime; }
+  setCardCooldown(type, endTime, duration = 0) { this.cardCooldowns[type] = endTime; this.cardCdTotal[type] = duration; }
   setHammerMode(on) { this._hammerMode = on; document.body.classList.toggle('hammer-mode', on); this.cursorHint.style.display = on ? 'block' : 'none'; }
 
   flashRed() { this.patrolFlash.classList.remove('show'); void this.patrolFlash.offsetWidth; this.patrolFlash.classList.add('show'); }
@@ -511,6 +512,7 @@ export class UIManager {
   setWeather(on) { this.rainOverlay.classList.toggle('show', on); }
   setPoison(on) { this.poisonOverlay.classList.toggle('show', on); }
   setRage(value, max) {
+    this._rage = value;
     document.getElementById('rage-fill').style.width = Math.min(100, value / max * 100) + '%';
     document.getElementById('rage-text').textContent = Math.floor(value) + '/' + max;
   }
@@ -583,14 +585,29 @@ export class UIManager {
       const end = this.cardCooldowns[type] || 0;
       const cdEl = this.cardEls[type].querySelector('.card-cd');
       const remain = end - now;
-      if (remain > 0) { cdEl.classList.remove('hidden'); cdEl.textContent = Math.ceil(remain) + 's'; this.cardEls[type].classList.add('disabled'); }
-      else { cdEl.classList.add('hidden'); this.cardEls[type].classList.remove('disabled'); }
+      if (remain > 0) {
+        cdEl.classList.remove('hidden');
+        cdEl.textContent = Math.ceil(remain) + 's';
+        // PvZ式冷却遮罩：随剩余时间从满卡高度回落
+        const total = this.cardCdTotal[type] || 0;
+        cdEl.style.height = total > 0 ? Math.min(100, (remain / total) * 100) + '%' : '100%';
+        this.cardEls[type].classList.add('disabled');
+      } else {
+        cdEl.classList.add('hidden');
+        cdEl.style.height = '';
+        this.cardEls[type].classList.remove('disabled');
+      }
     }
     for (const c of this.cardsConfig) {
-      if (c.isUlt || (c.isTicket && c.ticketCost === 0)) continue;
+      if (c.isTicket && c.ticketCost === 0) continue;
       const el = this.cardEls[c.type];
       if (!el) continue;
-      const enough = c.isTicket ? this._tickets >= c.ticketCost : (c.cost === 0 || this._resourceAfford >= c.cost);
+      let enough;
+      // 摸鱼值是所有卡类的基础门槛：cost>0 的卡摸鱼值不够一律置灰
+      const affordMoyu = !c.cost || c.cost === 0 || (this._resourceAfford || 0) >= c.cost;
+      if (c.isUlt) enough = affordMoyu && (this._rage || 0) >= c.rageCost;
+      else if (c.isTicket) enough = affordMoyu && this._tickets >= c.ticketCost;
+      else enough = affordMoyu;
       if (!(this.cardCooldowns[c.type] > now)) el.classList.toggle('disabled', !enough);
     }
     if (this.modal.classList.contains('show')) {

@@ -75,8 +75,8 @@ export class Peashooter extends Plant {
     const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.03), darkMat);
     mouth.position.set(0, -0.16, 0.22); head.add(mouth);
 
-    // 手臂前伸举激光笔
-    const armGroup = new THREE.Group(); armGroup.position.set(-0.18, 0.18, 0.05); armGroup.rotation.y = Math.PI; this.body.add(armGroup);
+    // 手臂前伸举激光笔(沿身体正前+z，随容器转向 -x 指向僵尸)
+    const armGroup = new THREE.Group(); armGroup.position.set(-0.18, 0.18, 0.05); armGroup.rotation.y = Math.PI / 2; this.body.add(armGroup);
     const upperArm = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.12), suitMat);
     upperArm.position.set(0.17, 0, 0); upperArm.castShadow = true; armGroup.add(upperArm);
     const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), skinMat);
@@ -92,9 +92,12 @@ export class Peashooter extends Plant {
     this.muzzle.position.set(0.66, 0, 0); armGroup.add(this.muzzle);
     this.armGroup = armGroup;
 
-    this.mesh.rotation.y = Math.PI / 2;
+    this.mesh.rotation.y = -Math.PI / 2; // 面朝 -x 迎战左侧来袭的僵尸
     const fallbackParts = [...this.mesh.children];
-    attachPlantModel(this, 'peashooter', fallbackParts);
+    attachPlantModel(this, 'peashooter', fallbackParts).then((visual) => {
+      // GLB 不可用时同步放大程序化替身，观感与正式模型(高2.15)接近
+      if (!visual && !this.dead) this.mesh.scale.setScalar(1.25);
+    });
   }
 
   behavior(dt, game) {
@@ -162,7 +165,7 @@ export class Peashooter extends Plant {
     }
     game.resource.spend(this.cfg.chargeCost);
     this._shoot(game, true);
-    const p = this.mesh.position.clone(); p.y += 1.5;
+    const p = this.mesh.position.clone(); p.y += 2.25;
     game.effects.spawnFloatText(game.grid.group, p, '年终总结！', '#ff8800');
     return true;
   }
@@ -175,7 +178,7 @@ export class Peashooter extends Plant {
       const alive = game.zombies.filter((z) => !z.dead).sort((a, b) => a.hp - b.hp);
       if (alive.length > 0) {
         alive[0].hp = 0;
-        const p = alive[0].mesh.position.clone(); p.y += 1.5;
+        const p = alive[0].mesh.position.clone(); p.y += 2.25;
         game.effects.spawnFloatText(game.grid.group, p, '空白PPT秒杀！', '#ffffff');
         game.toast('空白PPT混过去了！秒杀最弱僵尸');
         game.audio.play('die');
@@ -183,7 +186,7 @@ export class Peashooter extends Plant {
         game.toast('没有僵尸可秒杀…');
       }
     } else {
-      const p = this.mesh.position.clone(); p.y += 1.5;
+      const p = this.mesh.position.clone(); p.y += 2.25;
       game.effects.spawnFloatText(game.grid.group, p, this.clickCount + '/10', '#aaccff');
     }
   }

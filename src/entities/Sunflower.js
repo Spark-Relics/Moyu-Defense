@@ -119,13 +119,16 @@ export class Sunflower extends Plant {
     this._part(new THREE.ConeGeometry(0.015, 0.035, 4), sweatMat, 0, 0.015, 0, sweat2, false);
     this.sweatDrops = [sweat1, sweat2];
 
-    // 僵尸从棋盘右侧进入，角色正面朝向来敌方向(+x)。
-    this.mesh.rotation.y = Math.PI / 2;
+    // 僵尸从左侧房区来袭，角色正面朝向来敌方向(-x)，与僵尸面对面。
+    this.mesh.rotation.y = -Math.PI / 2;
 
     // Keep the procedural version only as an async-load fallback. Once the
     // authored GLB is ready it becomes the entire visible character.
     const fallbackParts = [...this.mesh.children];
-    attachSunflowerModel(this, fallbackParts);
+    attachSunflowerModel(this, fallbackParts).then((visual) => {
+      // GLB 不可用时同步放大程序化替身，观感与正式模型(高2.15)接近
+      if (!visual && !this.dead) this.mesh.scale.setScalar(1.25);
+    });
   }
 
   /** 辅助：创建网格 */
@@ -149,7 +152,7 @@ export class Sunflower extends Plant {
       const mul = game.moyuMul || 1;
       const amount = Math.round(this.cfg.produce * mul);
       game.resource.add(amount);
-      const p = this.mesh.position.clone(); p.y += 1.6;
+      const p = this.mesh.position.clone(); p.y += 2.25;
       game.effects.spawnFloatText(game.grid.group, p, '+' + amount, '#ffd34d');
       game.audio.play('produce');
     }
@@ -184,7 +187,7 @@ export class Sunflower extends Plant {
     const mul = game.moyuMul || 1;
     const amount = Math.round(this.cfg.clickGain * mul);
     game.resource.add(amount);
-    const p = this.mesh.position.clone(); p.y += 1.6;
+    const p = this.mesh.position.clone(); p.y += 2.25;
     game.effects.spawnFloatText(game.grid.group, p, '+' + amount, '#ffd34d');
     game.audio.play('produce');
     if (this.head) this.head.scale.setScalar(1.2);
