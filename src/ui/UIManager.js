@@ -92,9 +92,7 @@ export class UIManager {
       this._bindCardTooltip(card, c);
       // 植物卡片用拖拽，技能卡片用点击
       if (!c.isSkill && !c.isUlt && !c.isTicket) {
-        card.draggable = true;
-        card.addEventListener('dragstart', (e) => this._onCardDragStart(e, c.type));
-        card.addEventListener('click', () => this._handleCardClick(c.type));
+        this._bindPlantCard(card, c.type);
       } else {
         card.addEventListener('click', () => this._handleCardClick(c.type));
       }
@@ -106,7 +104,8 @@ export class UIManager {
 
     const placementStatus = document.createElement('div');
     placementStatus.id = 'placement-status';
-    placementStatus.innerHTML = '<span class="ps-key">Esc</span><span class="ps-copy">选择卡牌开始部署</span>';
+    placementStatus.innerHTML = '<span class="ps-copy">选择卡牌开始部署</span><button type="button" class="ps-cancel" aria-label="取消部署">取消 · Esc</button>';
+    placementStatus.querySelector('button').addEventListener('click', () => this.onCancelSelection?.());
     root.appendChild(placementStatus);
     this.placementStatus = placementStatus;
 
@@ -114,6 +113,15 @@ export class UIManager {
     placementCursor.id = 'placement-cursor';
     root.appendChild(placementCursor);
     this.placementCursor = placementCursor;
+    const feedback = document.createElement('div');
+    feedback.id = 'entity-feedback';
+    feedback.innerHTML = '<strong></strong><span></span><div class="charge-track"><i></i></div>';
+    root.appendChild(feedback);
+    this.entityFeedback = feedback;
+    const guide = document.createElement('div');
+    guide.id = 'control-guide';
+    guide.textContent = '拖卡部署 · 拖植物换位 · 拖空地平移 · 滚轮缩放';
+    root.appendChild(guide);
 
     const cardTooltip = document.createElement('div');
     cardTooltip.id = 'card-tooltip';
@@ -215,7 +223,9 @@ export class UIManager {
     this.startBtn = overlay.querySelector('#start-btn');
 
     // 帮助按钮
-    const helpBtn = document.createElement('div');
+    const helpBtn = document.createElement('button');
+    helpBtn.type = 'button';
+    helpBtn.setAttribute('aria-label', '游戏帮助');
     helpBtn.id = 'help-btn';
     helpBtn.textContent = '?';
     helpBtn.title = '游戏帮助';
@@ -248,11 +258,16 @@ export class UIManager {
         <div class="help-section">
           <h3>操作快捷键</h3>
           <ul>
-            <li>点击/拖拽底部卡片选择植物，再点草地放置</li>
+            <li><b>拖卡部署</b>：从底部卡片拖到空格，松手放置；也可点选卡片后点击空格</li>
+            <li><b>拖植物换位</b>：抓住场上的植物拖到空格，免费换位；无效位置会留在原位</li>
+            <li><b>拖空地平移</b>：左键拖动空地即可移动沙盘；滚轮围绕鼠标位置缩放</li>
+            <li><b>[Q][W][E]…</b> 按卡牌角标快速选卡；<b>[Esc] / 右键 / 取消按钮</b> 取消部署</li>
+            <li>触屏：点选卡牌，按住草地调整位置，松手部署</li>
             <li><b>[空格]</b> 暂停/继续游戏</li>
             <li><b>[1][2][3]</b> 切换游戏速度 1x/2x/3x</li>
             <li><b>[C]</b> 切换预设视角</li>
             <li><b>右键拖拽</b> 自由旋转视角，滚轮缩放</li>
+            <li><b>全景</b> 恢复完整棋盘；<b>− / +</b> 缩放；查看帮助时战斗暂停</li>
             <li>PPT射手<b>长按</b>蓄力可发射年终总结大招（消耗摸鱼值）</li>
             <li>点击向日葵社畜产额外摸鱼值（有风险！）</li>
           </ul>
@@ -260,7 +275,7 @@ export class UIManager {
         <div class="help-section">
           <h3>特殊事件</h3>
           <p><b>牛头指导</b>：定期弹出，选择不同效果。可用摸鱼锤敲碎幽灵打断！</p>
-          <p><b>老板巡逻</b>：点向日葵时随机触发，扣摸鱼值</p>
+          <p><b>老板巡逻</b>：点击向日葵时随机触发；警告期间继续点击会扣工位血量</p>
         </div>
         <button class="help-close" id="help-close-btn">明白了！</button>
       </div>`;
@@ -288,6 +303,8 @@ export class UIManager {
   }
 
   _bindCardTooltip(card, config) {
+    card.addEventListener('focus', () => this._showCardTooltip(card, config));
+    card.addEventListener('blur', () => this._hideCardTooltip());
     card.addEventListener('mouseenter', () => this._showCardTooltip(card, config));
     card.addEventListener('mousemove', () => this._positionCardTooltip(card));
     card.addEventListener('mouseleave', () => this._hideCardTooltip());
@@ -385,9 +402,7 @@ export class UIManager {
       this._applyCardArt(card, c.type);
       this._bindCardTooltip(card, c);
       if (!c.isSkill && !c.isUlt && !c.isTicket) {
-        card.draggable = true;
-        card.addEventListener('dragstart', (e) => this._onCardDragStart(e, c.type));
-        card.addEventListener('click', () => this._handleCardClick(c.type));
+        this._bindPlantCard(card, c.type);
       } else {
         card.addEventListener('click', () => this._handleCardClick(c.type));
       }
@@ -424,33 +439,60 @@ export class UIManager {
     return false;
   }
 
-  /** 植物卡片拖拽开始：只显示图标作为拖拽图像 */
-  _onCardDragStart(e, type) {
-    this._dragType = type;
-    e.dataTransfer.effectAllowed = 'copy';
-    e.dataTransfer.setData('text/plain', type);
-    // 创建只含图标的拖拽图像(不显示整个卡牌)
-    const iconEl = this.cardEls[type].querySelector('.card-icon');
-    if (iconEl) {
-      e.dataTransfer.setDragImage(iconEl, 25, 25);
+  _bindPlantCard(card, type) {
+    card.draggable = false;
+    card.addEventListener('dragstart', event => event.preventDefault());
+    let pointerHandled = false;
+    card.addEventListener('pointerdown', event => {
+      pointerHandled = Boolean(this.onCardPointerDown?.(event, type, card));
+    });
+    card.addEventListener('click', event => {
+      // Pointer selection was already handled; keyboard activation still works.
+      if (!pointerHandled || event.detail === 0) this._handleCardClick(type);
+      pointerHandled = false;
+    });
+    card.addEventListener('lostpointercapture', () => this.onCardCaptureLost?.());
+  }
+
+  showDragGhost(type, x, y, label) {
+    if (!this.dragGhost) {
+      this.dragGhost = document.createElement('div');
+      this.dragGhost.id = 'drag-ghost';
+      document.getElementById('ui-root').appendChild(this.dragGhost);
     }
+    if (this._ghostType !== type) {
+      this._ghostType = type;
+      this.dragGhost.innerHTML = '<div class="drag-portrait">' + getCardIcon(type) + '</div><span></span>';
+    }
+    this.dragGhost.querySelector('span').textContent = label;
+    this.dragGhost.style.left = x + 'px';
+    this.dragGhost.style.top = y + 'px';
+    this.dragGhost.classList.add('show');
+    document.body.classList.add('dragging-card');
+  }
+  hideDragGhost() {
+    this.dragGhost?.classList.remove('show');
+    document.body.classList.remove('dragging-card');
   }
 
   selectCard(type) {
+    this._hideCardTooltip();
     this.selectedCard = type;
     for (const k in this.cardEls) this.cardEls[k].classList.toggle('selected', k === type);
+    for (const k in this.cardEls) this.cardEls[k].setAttribute('aria-pressed', String(k === type));
     const cfg = this.cardsConfig.find((card) => card.type === type) || PLANT_TYPES[type];
     const isPlant = cfg && !cfg.isSkill && !cfg.isUlt && !cfg.isTicket;
     document.body.classList.toggle('placement-mode', Boolean(isPlant));
     if (this.placementStatus && cfg) {
-      const verb = isPlant ? '移动到草地，点击绿色格子放置' : '点击目标使用';
-      this.placementStatus.querySelector('.ps-copy').textContent = `${cfg.name} · ${verb} · 右键取消`;
+      const verb = isPlant ? '拖到空位，松手部署' : '点击目标使用';
+      this.placementStatus.querySelector('.ps-copy').textContent = `${cfg.name} · ${verb}`;
       this.placementStatus.classList.add('show');
     }
   }
   clearSelection() {
     this.selectedCard = null;
     for (const k in this.cardEls) this.cardEls[k].classList.remove('selected');
+    for (const k in this.cardEls) this.cardEls[k].setAttribute('aria-pressed', 'false');
     document.body.classList.remove('placement-mode');
     if (this.placementStatus) this.placementStatus.classList.remove('show');
     this.hidePlacementFeedback();
@@ -461,7 +503,21 @@ export class UIManager {
     this.placementCursor.className = valid ? 'show valid' : 'show invalid';
     this.placementCursor.style.left = `${Math.min(window.innerWidth - 130, x + 16)}px`;
     this.placementCursor.style.top = `${Math.max(82, y - 34)}px`;
+    const width = this.placementCursor.offsetWidth;
+    this.placementCursor.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, x + 16))}px`;
   }
+  showEntityFeedback(x, y, title, hint, progress = null) {
+    const el = this.entityFeedback;
+    el.classList.add('show');
+    el.classList.toggle('charging', progress != null);
+    el.classList.toggle('ready', progress >= 1);
+    el.querySelector('strong').textContent = title;
+    el.querySelector('span').textContent = hint;
+    el.querySelector('i').style.width = `${Math.min(1, progress || 0) * 100}%`;
+    el.style.left = `${Math.max(8, Math.min(window.innerWidth - el.offsetWidth - 8, x + 16))}px`;
+    el.style.top = `${Math.max(106, Math.min(window.innerHeight - 145, y - el.offsetHeight - 18))}px`;
+  }
+  hideEntityFeedback() { this.entityFeedback.classList.remove('show'); }
   hidePlacementFeedback() { if (this.placementCursor) this.placementCursor.className = ''; }
   setCardCooldown(type, endTime, duration = 0) { this.cardCooldowns[type] = endTime; this.cardCdTotal[type] = duration; }
   setHammerMode(on) { this._hammerMode = on; document.body.classList.toggle('hammer-mode', on); this.cursorHint.style.display = on ? 'block' : 'none'; }
@@ -604,7 +660,7 @@ export class UIManager {
       if (!el) continue;
       let enough;
       // 摸鱼值是所有卡类的基础门槛：cost>0 的卡摸鱼值不够一律置灰
-      const affordMoyu = !c.cost || c.cost === 0 || (this._resourceAfford || 0) >= c.cost;
+      const affordMoyu = this.isFreePlacement?.() || !c.cost || c.cost === 0 || (this._resourceAfford || 0) >= c.cost;
       if (c.isUlt) enough = affordMoyu && (this._rage || 0) >= c.rageCost;
       else if (c.isTicket) enough = affordMoyu && this._tickets >= c.ticketCost;
       else enough = affordMoyu;
@@ -688,7 +744,10 @@ export class UIManager {
   }
   hideOverlay() { this.overlay.classList.add('hidden'); }
 
-  _toggleHelp() { this.helpOverlay.classList.toggle('hidden'); }
+  _toggleHelp() {
+    this.helpOverlay.classList.toggle('hidden');
+    this.onHelpChange?.(!this.helpOverlay.classList.contains('hidden'));
+  }
 
   /** 关卡结算弹窗(转发给 LevelUI) */
   showLevelResult(grade, level, maxUnlocked, failed = false, hpRatio = 0) {

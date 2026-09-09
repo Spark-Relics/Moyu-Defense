@@ -46,7 +46,7 @@ export class LevelUI {
             <strong>守住工位，熬到下班</strong>
             <small>部署牛马植物，处理突发需求，别让甲方越过防线。</small>
           </div>
-          <div class="lm-hero-meta"><span>9 × 5 防线</span><span>实时波次</span><span>低多边形 3D</span></div>
+          <div class="lm-hero-meta"><span>工位防线</span><span>实时波次</span><span>低多边形 3D</span></div>
         </section>
         <section class="lm-route" aria-label="关卡路线">
           <div class="lm-route-head"><div><span class="lm-route-kicker">防线档案</span><h2>选择关卡</h2></div><span class="lm-route-count">01—06</span></div>

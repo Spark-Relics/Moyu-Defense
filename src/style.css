@@ -804,6 +804,38 @@ body.hammer-mode #game-canvas { cursor: crosshair; }
 #placement-cursor.invalid { color: #ff9a8f; }
 body.placement-mode #game-canvas { cursor: crosshair; }
 
+/* Pointer and touch feedback stays above the action instead of covering targets. */
+#game-canvas { touch-action: none; }
+#placement-status.show { pointer-events: auto; }
+.ps-cancel {
+  flex-shrink: 0; min-height: 34px; padding: 5px 10px; cursor: pointer;
+  border: 1px solid #8ca899; border-radius: 6px; background: #2b4135; color: #edffe8; font: inherit;
+}
+.cam-tool {
+  min-width: 32px; min-height: 32px; padding: 4px 6px; border-radius: 6px;
+  border: 1px solid #88764f; background: #332b1d; color: #ffe08a; cursor: pointer;
+}
+.cam-tool:hover, .ps-cancel:hover { background: #586341; }
+#entity-feedback {
+  position: fixed; z-index: 32; display: none; pointer-events: none;
+  max-width: min(300px, calc(100vw - 16px)); padding: 9px 12px;
+  border: 1px solid #92bda2; border-radius: 9px; color: #f3f9e9;
+  background: rgba(13, 27, 23, .96); box-shadow: 0 5px 20px #0005;
+}
+#entity-feedback.show { display: block; }
+#entity-feedback strong { display: block; font-size: 12px; color: #ffe59b; }
+#entity-feedback span { display: block; font-size: 11px; margin-top: 5px; line-height: 1.5; }
+.charge-track { display: none; height: 6px; background: #ffffff25; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.charging .charge-track { display: block; }
+.charge-track i { display: block; height: 100%; background: #ffd35c; }
+.ready .charge-track i { background: #91ffc0; }
+#pause-overlay:not(.show) { visibility: hidden; }
+
+@media (max-width: 540px) {
+  #cam-switch { max-width: calc(100vw - 16px); }
+  .cam-btn { min-width: 44px; padding: 6px; }
+}
+
 #game-controls {
   left: auto; right: 16px; bottom: 14px; flex-direction: row; align-items: center;
   gap: 5px; padding: 6px 7px; border-radius: 11px;
@@ -842,4 +874,44 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 @media (prefers-reduced-motion: reduce) {
   .card, #placement-status, #toast { transition: none !important; }
   .special-card, .wave-countdown.danger { animation: none !important; }
+}
+
+#placement-status:not(.show) { visibility: hidden; }
+
+/* Office diorama: quieter chrome and a tactile drag interaction. */
+#ui-root::before { background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(40,64,55,.09)); }
+#game-canvas { cursor: grab; }
+.card { user-select: none; -webkit-user-drag: none; }
+.card:not(.skill-card):not(.ult-card):not(.ticket-card) { touch-action: none; cursor: grab; }
+body.dragging-card, body.dragging-card * { cursor: grabbing !important; }
+#drag-ghost {
+  display: none; position: fixed; z-index: 80; pointer-events: none;
+  transform: translate(-50%, calc(-100% - 20px)) rotate(-5deg);
+  width: 78px; padding: 7px; border: 2px solid #d4f7dc; border-radius: 14px;
+  background: #27483f; box-shadow: 0 12px 28px #122f3d44; color: #eefbdd; text-align: center;
+}
+#drag-ghost.show { display: block; }
+.drag-portrait { height: 55px; display: grid; place-items: center; }
+.drag-portrait svg, .drag-portrait img { max-width: 54px; max-height: 54px; }
+#drag-ghost span { display: block; font: 600 11px sans-serif; margin-top: 5px; }
+.hud-cluster, #cam-switch, #game-controls, #rage-bar, #card-bar {
+  border-color: #728e775e; background: linear-gradient(165deg, #304b43f2, #203a33f5);
+  box-shadow: 0 5px 18px #273c3626, inset 0 1px #ecf2d321;
+}
+#control-guide {
+  position: absolute; bottom: 124px; left: 20px; pointer-events: none;
+  color: #3e594d; font: 600 12px 'Microsoft YaHei', sans-serif;
+  display: none; letter-spacing: .3px;
+}
+body.in-game #control-guide { display: block; }
+body.placement-mode #control-guide, body.dragging-card #control-guide { visibility: hidden; }
+
+@media (max-width: 540px) {
+  #control-guide { bottom: 202px; left: 10px; font-size: 10px; }
+  #rage-bar { top: 106px; }
+  #card-bar { max-width: calc(100vw - 16px); bottom: 8px; }
+  #game-controls { bottom: 107px; }
+  #help-btn { bottom: 148px; }
+  #placement-status { bottom: 156px; }
+  #toast { top: 148px; max-width: calc(100vw - 24px); }
 }

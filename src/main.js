@@ -18,9 +18,10 @@ import { createZombie } from './entities/Zombie.js';
 import { preloadCharacterModels } from './systems/CharacterModelLoader.js';
 import { tweenManager } from './utils/Tween.js';
 import { GridDebugger } from './utils/GridDebugger.js';
+import { getBoardOrbitRadius } from './utils/CameraFraming.js';
 
 export const CFG = {
-  ROWS: 9, COLS: 15, CELL: 3.00,
+  ROWS: 5, COLS: 9, CELL: 3.00,
   BASE_HP: 100,
   PATROL_CHANCE: 0.15,
   PATROL_DURATION: 2,
@@ -83,7 +84,9 @@ class Game {
     this.levels = new LevelSystem(this);
     this.levelUI = new LevelUI(this.levels);
     this.ui.setLevelUI(this.levelUI);
-    this.debugger = new GridDebugger(this);
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('debug')) {
+      this.debugger = new GridDebugger(this);
+    }
 
     // 关卡UI回调
     this.levelUI.onStartLevel = (id) => this.startLevel(id);
@@ -101,8 +104,7 @@ class Game {
 
   _initThree() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87CEEB);
-    this.scene.fog = new THREE.FogExp2(0x87CEEB, 0.012);
+    this.scene.background = new THREE.Color(0xdce6df);
     // 视角预设: [名称, position, target]
     this._camPresets = [
       { name: '高俯视', pos: [0, 32, 38], tgt: [0, 0, 0] },    // 当前视角
@@ -125,21 +127,23 @@ class Game {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.canvas.addEventListener('webglcontextlost', (event) => this._onContextLost(event), false);
     this.canvas.addEventListener('webglcontextrestored', () => this._onContextRestored(), false);
-    this.scene.add(new THREE.AmbientLight(0x606880, 1.1));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.3);
-    dir.position.set(16, 28, 12); dir.castShadow = true;
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const dir = new THREE.DirectionalLight(0xffedcf, 2.1);
+    dir.position.set(-10, 28, 14); dir.castShadow = true;
+    dir.shadow.bias = -0.0003;
+    dir.shadow.normalBias = 0.025;
     dir.shadow.mapSize.set(2048, 2048);
     dir.shadow.camera.left = -30; dir.shadow.camera.right = 30;
     dir.shadow.camera.top = 30; dir.shadow.camera.bottom = -30;
     this.scene.add(dir);
-    this.scene.add(new THREE.HemisphereLight(0xb0d8ff, 0x4a7a3a, 0.5));
+    this.scene.add(new THREE.HemisphereLight(0xe5f5ff, 0x829c8a, 1.2));
 
     // 棋盘下方大地基底(避免悬浮感)
     const groundGeo = new THREE.PlaneGeometry(200, 200);
-    const groundMat = new THREE.MeshLambertMaterial({ color: 0x3a5a2a });
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0xc9d6cc, roughness: 1 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.35;
+    ground.position.y = -1.1;
     ground.receiveShadow = true;
     this.scene.add(ground);
 
@@ -166,6 +170,7 @@ class Game {
     this._orbitMaxPhi = Math.PI / 2 - 0.05; // 最大垂直角(接近水平)
     this._orbitTarget = new THREE.Vector3(0, 0, 0); // 相机注视点
     this._initOrbitFromCamera();
+    this._fitBoard();
 
     // 创建视角切换UI
     this._buildCamUI();
@@ -182,15 +187,16 @@ class Game {
 
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.isContentEditable) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         if (this.ui.dismissTopOverlay()) return;
-        if (this.selectedCard || this.hammerMode) this._cancelActiveTool();
+        if (this.selectedCard || this.hammerMode || this.interaction?.gestures.active) this._cancelActiveTool();
         else this._togglePause();
         return;
       }
       if (e.key === ' ') { e.preventDefault(); this._togglePause(); return; }
-      if (this.ui.isInteractionBlocked()) return;
+      if (!this.running || this.paused || this.ui.isInteractionBlocked()) return;
       const cardType = this.ui.getCardTypeForHotkey(e.key);
       if (cardType) { e.preventDefault(); this._onCardClick(cardType); return; }
       if (e.key === 'c' || e.key === 'C') this._cycleCamera();
@@ -199,6 +205,10 @@ class Game {
       if (e.key === '3') this._setSpeed(3);
     });
     window.addEventListener('resize', () => this._onResize());
+    window.addEventListener('blur', () => {
+      this._orbitActive = false;
+      if (this.running && !this.paused) this._togglePause();
+    });
   }
 
   /** 构建视角切换按钮 */
@@ -222,6 +232,17 @@ class Game {
     hint.className = 'cam-hint';
     hint.innerHTML = '右键拖拽旋转<br>滚轮缩放';
     container.appendChild(hint);
+    for (const [label, title, action] of [
+      ['全景', '恢复完整棋盘视角', () => this._fitBoard()],
+      ['−', '缩小视野中的棋盘', () => this._zoomCamera(1.12)],
+      ['+', '放大棋盘', () => this._zoomCamera(1 / 1.12)],
+    ]) {
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'cam-tool'; btn.textContent = label;
+      btn.setAttribute('aria-label', title);
+      btn.addEventListener('click', action);
+      container.appendChild(btn);
+    }
     document.getElementById('ui-root').appendChild(container);
     this._camButtons = container.querySelectorAll('.cam-btn');
   }
@@ -271,7 +292,13 @@ class Game {
   _togglePause() {
     if (!this.running || this._contextLost) return;
     this.paused = !this.paused;
+    this.interaction?.reset();
+    this._orbitActive = false;
     this.ui.setPaused(this.paused);
+    this._syncPauseButton();
+  }
+
+  _syncPauseButton() {
     const btn = document.getElementById('gc-pause');
     if (this.paused) {
       btn.classList.add('paused');
@@ -307,7 +334,7 @@ class Game {
 
   /** 更新按钮选中状态 */
   _updateCamButtons() {
-    this._camButtons.forEach((btn, i) => {
+    this._camButtons?.forEach((btn, i) => {
       const active = i === this._camIdx;
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', String(active));
@@ -316,6 +343,8 @@ class Game {
 
   /** 平滑切换到指定预设 */
   _animateToPreset(idx) {
+    if (this.paused || this.ui?.isInteractionBlocked()) return;
+    if (idx === 0) { this._fitBoard(); return; }
     if (this._camAnimating) return;
     const p = this._camPresets[idx];
     this._camIdx = idx;
@@ -361,8 +390,9 @@ class Game {
   /** 右键按下：开始拖拽 */
   _onOrbitDown(e) {
     if (e.button !== 2) return; // 右键
+    if (!this.running || this.paused || this.ui.isInteractionBlocked()) return;
     if (e.defaultPrevented) return;
-    if (this.selectedCard || this.hammerMode) {
+    if (this.selectedCard || this.hammerMode || this.interaction?.gestures.active) {
       e.preventDefault();
       this._cancelActiveTool();
       return;
@@ -371,6 +401,8 @@ class Game {
     this._orbitPrevX = e.clientX;
     this._orbitPrevY = e.clientY;
     this._camAnimating = false; // 中断动画
+    this._camIdx = -1;
+    this._updateCamButtons();
     this.canvas.style.cursor = 'grabbing';
   }
 
@@ -401,10 +433,60 @@ class Game {
   /** 滚轮缩放 */
   _onWheel(e) {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 1.08 : 0.92;
-    this._orbitRadius = Math.max(this._orbitMinRadius, Math.min(this._orbitMaxRadius, this._orbitRadius * delta));
-    this._camAnimating = false; // 中断动画
-    this._updateCamButtons();   // 取消预设高亮
+    if (this.interaction?.gestures.active) return;
+    const before = this._boardPoint(e);
+    this._zoomCamera(Math.exp(THREE.MathUtils.clamp(e.deltaY, -100, 100) * 0.0015));
+    if (before && this.ui.canInteract()) this._panBoard(before, e);
+  }
+
+  _boardPoint(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    const pointer = new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1,
+      -(event.clientY - rect.top) / rect.height * 2 + 1);
+    this.camera.updateMatrixWorld();
+    const ray = new THREE.Raycaster(); ray.setFromCamera(pointer, this.camera);
+    return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+  }
+
+  _panBoard(anchor, event) {
+    if (!anchor || !this.ui.canInteract()) return;
+    const point = this._boardPoint(event);
+    if (!point) return;
+    this._camAnimating = false;
+    this._orbitTarget.add(anchor.clone().sub(point));
+    this._orbitTarget.x = THREE.MathUtils.clamp(this._orbitTarget.x, -CFG.COLS * CFG.CELL * 0.65, CFG.COLS * CFG.CELL * 0.65);
+    this._orbitTarget.z = THREE.MathUtils.clamp(this._orbitTarget.z, -CFG.ROWS * CFG.CELL * 0.8, CFG.ROWS * CFG.CELL * 0.8);
+    this._camIdx = -1;
+    this._applyOrbit(); this._updateCamButtons();
+  }
+
+  _zoomCamera(factor) {
+    if (!this.running || this.paused || this.ui.isInteractionBlocked()) return;
+    this._camAnimating = false;
+    this._orbitRadius = THREE.MathUtils.clamp(this._orbitRadius * factor, this._orbitMinRadius, this._orbitMaxRadius);
+    this._camIdx = -1;
+    this._applyOrbit();
+    this._updateCamButtons();
+  }
+
+  // Frame the entire board, including both landmarks, inside the HUD's safe area.
+  _fitBoard() {
+    this._camAnimating = false;
+    this._orbitTheta = 0;
+    this._orbitPhi = 0.65;
+    this._orbitTarget.set(0, 0, 0);
+    const halfW = (CFG.COLS / 2 + 1.8) * CFG.CELL;
+    const halfD = (CFG.ROWS / 2 + 0.85) * CFG.CELL;
+    const radius = getBoardOrbitRadius({ halfWidth: halfW, halfDepth: halfD,
+      phi: this._orbitPhi, fov: this.camera.fov, aspect: this.camera.aspect, height: window.innerHeight });
+    this._orbitRadius = radius;
+    this.scene.fog = new THREE.Fog(0xdce6df, radius * 2, radius * 5);
+    this._orbitMaxRadius = Math.max(120, radius * 1.5);
+    this.camera.far = Math.max(200, radius * 3);
+    this.camera.updateProjectionMatrix();
+    this._applyOrbit();
+    this._camIdx = 0;
+    this._updateCamButtons?.();
   }
 
   /** 从轨道参数更新 camera 位置 */
@@ -438,6 +520,10 @@ class Game {
       );
       this._camTarget.set(tx, ty, tz);
       this.camera.lookAt(this._camTarget);
+      this._orbitTheta = theta;
+      this._orbitPhi = phi;
+      this._orbitRadius = radius;
+      this._orbitTarget.set(tx, ty, tz);
       if (t >= 1) {
         this._camAnimating = false;
         // 同步轨道参数到最终值
@@ -450,9 +536,7 @@ class Game {
     }
 
     // 自由拖拽：从轨道参数更新相机
-    if (this._orbitActive) {
-      this._applyOrbit();
-    }
+    this._applyOrbit();
 
     // 屏幕震动叠加
     if (this._shakeDuration > 0) {
@@ -470,6 +554,7 @@ class Game {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this._fitBoard();
   }
 
   _onContextLost(event) {
@@ -497,6 +582,16 @@ class Game {
     // 先用空列表初始化，startLevel时会重新设置
     this.ui = new UIManager([]);
     this.ui.onCardClick = (type) => this._onCardClick(type);
+    this.ui.onCardPointerDown = (event, type, card) => this.interaction.gestures.startCard(event, type, card);
+    this.ui.onCardCaptureLost = () => { if (this.interaction.gestures.active) this.interaction.reset(); };
+    this.ui.onCancelSelection = () => this._cancelActiveTool();
+    this.ui.canInteract = () => this.running && !this.paused && !this._contextLost && !this.ui.isInteractionBlocked();
+    this.ui.isFreePlacement = () => Boolean(this.items?.isUltMoyu());
+    this.ui.onHelpChange = (open) => {
+      this.interaction?.reset();
+      this._orbitActive = false;
+      if (open) this.ui._hideCardTooltip();
+    };
     this.ui.pauseOverlay.addEventListener('click', () => this._togglePause());
   }
 
@@ -513,8 +608,10 @@ class Game {
 
   // ---------- 卡片点击 ----------
   _onCardClick(type) {
-    if (!this.running) return;
+    if (!this.ui.canInteract()) return;
     const cfg = PLANT_TYPES[type];
+    if (!cfg || !this.ui.cardEls[type]) return;
+    this.interaction.reset(true);
 
     if (this.selectedCard === type || (type === 'hammer' && this.hammerMode)) {
       this._cancelActiveTool();
@@ -565,6 +662,7 @@ class Game {
   }
 
   _cancelActiveTool(showToast = true) {
+    this.interaction?.reset();
     const hadTool = Boolean(this.selectedCard || this.hammerMode);
     this.selectedCard = null;
     this.hammerMode = false;
@@ -611,6 +709,7 @@ class Game {
 
   // ---------- 关卡开始 ----------
   startLevel(levelId) {
+    document.body.classList.add('in-game');
     this.levelUI.hideMenu();
     this.audio.ensure();
     this._clearEntities();
@@ -635,6 +734,14 @@ class Game {
     this.moyuMul = 1; this.rage = 0;
     this.interaction.reset();
     this.paused = false; this.speedMul = 1;
+    this.ui.setPaused(false);
+    this._syncPauseButton();
+    for (const s of [1, 2, 3]) {
+      const btn = document.getElementById('gc-speed-' + s);
+      btn.classList.toggle('active', s === 1);
+      btn.setAttribute('aria-pressed', String(s === 1));
+    }
+    this._fitBoard();
     this.killStreak = 0; this.streakTimer = 0; this.totalKills = 0; this.score = 0;
     this._updateKillDisplay();
     this._atkDebuffMul = 1; this._atkDebuffEnd = 0;
@@ -663,11 +770,13 @@ class Game {
     let dt = (now - this.lastT) / 1000;
     this.lastT = now;
     dt = Math.min(dt, 0.05);
-    if (this.running && !this.paused) {
+    const helpOpen = this.ui.helpOverlay && !this.ui.helpOverlay.classList.contains('hidden');
+    if (this.running && !this.paused && !helpOpen) {
       const subDt = dt * this.speedMul;
       this._update(Math.min(subDt, 0.1));
     }
     tweenManager.update(dt);
+    this.interaction.update();
     if (!this._contextLost) this.renderer.render(this.scene, this.camera);
   };
 
