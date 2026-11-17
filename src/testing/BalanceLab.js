@@ -171,6 +171,7 @@ export class BalanceLab {
 
   async simulate(levelId, seed, profile, campaign) {
     const g = this.game, nativeRandom = Math.random, rng = randomFor(seed * 1009 + levelId * 17);
+    let briefingShown = false;
     // Old-round teardown can consume cosmetic RNG. Isolate it before seeding an
     // independent fixture, so a fresh page and repeated batches agree exactly.
     if (!campaign || levelId === 1) {
@@ -182,6 +183,11 @@ export class BalanceLab {
         const next = document.querySelector('#level-result .result-next');
         if (!next) throw Error(`第 ${levelId - 1} 关未提供下一关入口`);
         next.click();
+        const briefing = document.getElementById('level-briefing');
+        const start = briefing?.querySelector('.briefing-start');
+        if (!start || !briefing.querySelector('#briefing-title')?.textContent.includes(LEVELS[levelId - 1].name)) throw Error(`第 ${levelId} 关开战前简报不完整`);
+        briefingShown = true;
+        start.click();
       } else {
         document.getElementById('level-result')?.remove();
         g.startLevel(levelId);
@@ -204,7 +210,7 @@ export class BalanceLab {
         if (g.eventSystem.active && !previousEvent) eventCount++;
         previousEvent = g.eventSystem.active;
       } finally { Math.random = nativeRandom; }
-      if (++step % 240 === 0) {
+      if (++step % 1200 === 0) {
         this.panel.querySelector('#balance-status').textContent = `运行中：${profile} / 第 ${levelId} 关 / 种子 ${seed} / ${g.clock.toFixed(0)} 秒 / 工位 ${g.baseHp}`;
         await new Promise(resolve => setTimeout(resolve, 0));
       }
@@ -215,7 +221,7 @@ export class BalanceLab {
     if (status !== 'timeout' && status !== 'stopped' && (!dialog || nextButton !== (status === 'win' && levelId < LEVELS.length))) throw Error(`第 ${levelId} 关结算或下一关入口错误`);
     const saved = g.storage.loadProgress();
     const result = { profile, level: levelId, seed, result: status, hp: g.baseHp, duration: Math.round(g.clock * 10) / 10, kills: g.totalKills, score: g.score, minResource, resource: g.resource.value, deployments, maxPlants, maxEnemies, events: eventCount, grade: g.levels.lastResult?.grade, resultDialog: Boolean(dialog), unlocked: g.levels.maxUnlocked,
-      initialResource, nextButton, resultTitle: dialog?.querySelector('#result-title')?.textContent,
+      initialResource, nextButton, briefingShown, resultTitle: dialog?.querySelector('#result-title')?.textContent,
       persistedUnlocked: saved.maxUnlocked, savedGrade: saved.records[levelId]?.grade, savedScore: saved.records[levelId]?.score,
       cardCount: Object.keys(g.ui.cardEls).length, hotkeyCount: Object.keys(g.ui.cardHotkeys).length,
     };

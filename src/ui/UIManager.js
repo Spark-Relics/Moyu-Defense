@@ -99,7 +99,24 @@ export class UIManager {
       bar.appendChild(card);
       this.cardEls[c.type] = card;
     }
-    root.appendChild(bar);
+    const dock = document.createElement('div');
+    dock.id = 'card-dock';
+    dock.innerHTML = '<button type="button" class="card-page" aria-label="查看前面的卡牌">‹</button><button type="button" class="card-page" aria-label="查看后面的卡牌">›</button>';
+    const [previous, next] = dock.children;
+    dock.insertBefore(bar, next);
+    root.appendChild(dock);
+    const updatePages = () => {
+      const overflow = bar.scrollWidth > bar.clientWidth + 2;
+      dock.classList.toggle('has-overflow', overflow);
+      previous.hidden = next.hidden = !overflow;
+      previous.disabled = bar.scrollLeft < 2;
+      next.disabled = bar.scrollLeft + bar.clientWidth >= bar.scrollWidth - 2;
+    };
+    previous.addEventListener('click', () => bar.scrollBy({ left: -bar.clientWidth * .8 }));
+    next.addEventListener('click', () => bar.scrollBy({ left: bar.clientWidth * .8 }));
+    bar.addEventListener('scroll', updatePages, { passive: true });
+    new ResizeObserver(updatePages).observe(bar);
+    this._updateCardPages = () => requestAnimationFrame(updatePages);
     this._assignCardHotkeys();
 
     const placementStatus = document.createElement('div');
@@ -135,7 +152,7 @@ export class UIManager {
       <div class="niu-head">牛</div>
       <div class="niu-title" id="niu-title">牛头指导来袭！</div>
       <div class="niu-options" id="niu-options"></div>
-      <div class="niu-timer" id="niu-timer">⏳ 6秒内做选择，否则强制最坑项！</div>`;
+      <div class="niu-timer" id="niu-timer">⏳ 12秒内做选择，否则强制最坑项！</div>`;
     root.appendChild(modal);
     this.modal = modal;
 
@@ -168,6 +185,7 @@ export class UIManager {
     const onboarding = document.createElement('aside');
     onboarding.id = 'onboarding';
     onboarding.setAttribute('aria-label', '新手部署指引');
+    onboarding.setAttribute('aria-live', 'polite');
     onboarding.innerHTML = '<span class="onboarding-step"></span><strong></strong><p></p><button type="button" aria-label="关闭新手指引">×</button>';
     onboarding.querySelector('button').addEventListener('click', () => { onboarding.hidden = true; });
     onboarding.hidden = true;
@@ -268,7 +286,7 @@ export class UIManager {
     helpOverlay.className = 'hidden';
     helpOverlay.innerHTML = `
       <div class="help-box">
-        <div class="help-title">游戏说明</div>
+        <h2 class="help-title" tabindex="-1" autofocus>游戏说明</h2>
         <div class="help-section">
           <h3>基本玩法</h3>
           <p>僵尸从左侧来袭，目标是保护右侧工位不被攻破。</p>
@@ -312,7 +330,6 @@ export class UIManager {
       </div>`;
     root.appendChild(helpOverlay);
     helpOverlay.querySelector('#help-close-btn').addEventListener('click', () => this._toggleHelp());
-    helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay) this._toggleHelp(); });
     this.helpOverlay = helpOverlay;
     helpOverlay.addEventListener('cancel', event => { event.preventDefault(); this._toggleHelp(); });
 
@@ -391,15 +408,6 @@ export class UIManager {
     bar.innerHTML = '';
     this.cardEls = {};
 
-    // 按类型分组: 植物 → 技能 → 大招 → 工时券 → 特殊
-    const groups = [
-      { types: ['sunflower','peashooter','wallnut','auditor'], label: '' },
-      { filter: (c) => c.isSkill && !c.isSpecial, label: 'sep' },
-      { filter: (c) => c.isUlt, label: 'sep-ult' },
-      { filter: (c) => c.isTicket, label: 'sep-ticket' },
-      { filter: (c) => c.isSpecial, label: 'sep-special' },
-    ];
-
     const placed = new Set();
     for (const cfg of this.cardsConfig) {
       if (placed.has(cfg.type)) continue;
@@ -442,6 +450,8 @@ export class UIManager {
       this.cardEls[c.type] = card;
     }
     this._assignCardHotkeys();
+    bar.scrollLeft = 0;
+    this._updateCardPages();
   }
 
   _assignCardHotkeys() {
@@ -674,6 +684,10 @@ export class UIManager {
     clearTimeout(this._waveBannerTimer); clearTimeout(this._toastTimer);
     this.waveBanner.classList.remove('show'); this.toastEl.classList.remove('show');
     this.setBossDarken(false); this.setWeather(false); this.setPoison(false);
+    this.hideBossSkill();
+    clearTimeout(this._bossWarnTimer);
+    document.getElementById('boss-warning')?.classList.remove('show');
+    this.boardStatus.textContent = '';
     this.onboarding.hidden = true;
   }
 
@@ -687,9 +701,9 @@ export class UIManager {
     if (stage === this._onboardingStage) return;
     this._onboardingStage = stage;
     const steps = [
-      ['1 / 3 · 积攒资源', '先请向日葵搭子上岗', '拖一张向日葵卡到空格，每 5 秒生产 25 摸鱼值。建议放在右侧后排。'],
-      ['2 / 3 · 建立防线', '在敌人同行部署 PPT 射手', '攒够 75 摸鱼值，射手会自动攻击左侧同一行的敌人。'],
-      ['3 / 3 · 灵活调度', '防线就绪，自由发挥！', '拖动植物可免费换行支援。长按射手可蓄力，注意每次消耗 40 摸鱼值。'],
+      ['1 / 3 · 积攒资源', '先种向日葵，每 5 秒产出 25', '点选向日葵卡，再点右侧空格部署；也可以把卡牌拖过去。'],
+      ['2 / 3 · 建立防线', '同行放射手，自动向左攻击', '攒够 75 摸鱼值再部署。先守来敌的一行，再逐步覆盖五行。'],
+      ['3 / 3 · 灵活调度', '拖动已有植物，免费换行补防', '长按射手可蓄力，每次消耗 40 摸鱼值。随时点 ? 暂停查看说明。'],
     ];
     const [step, title, detail] = steps[stage];
     this.onboarding.querySelector('span').textContent = step;
@@ -794,6 +808,7 @@ export class UIManager {
   }
 
   showNiuEvent(event, onChoose, decisionEnd) {
+    this.onDecisionOpen?.();
     this.niuOnChoose = onChoose; this.niuDecisionEnd = decisionEnd;
     document.getElementById('niu-title').textContent = event.title;
     const opts = document.getElementById('niu-options'); opts.innerHTML = '';
@@ -841,7 +856,11 @@ export class UIManager {
   _toggleHelp() {
     this.helpOverlay.classList.toggle('hidden');
     if (this.helpOverlay.classList.contains('hidden')) this.helpOverlay.close();
-    else this.helpOverlay.showModal();
+    else {
+      this._hideCardTooltip();
+      this.helpOverlay.showModal();
+      this.helpOverlay.scrollTop = 0;
+    }
     this.onHelpChange?.(!this.helpOverlay.classList.contains('hidden'));
   }
 

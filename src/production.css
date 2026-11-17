@@ -1,5 +1,16 @@
 /* Shared office palette; these surfaces extend the existing 3D diorama. */
 :root { --office-deep: #183c33; --office-panel: #244b40; --office-paper: #f5f0dd; --office-muted: #bbcebf; --office-gold: #f1c45c; --office-line: #9cba9e42; }
+#ui-root { --scrollbar-thumb: #b5a76f; --scrollbar-track: #183c33; }
+#ui-root :is(dialog, #level-menu, #card-bar, .help-box) { scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-width: thin; }
+@supports not (scrollbar-color: auto) {
+  #ui-root :is(dialog, #level-menu, #card-bar, .help-box) { scrollbar-width: auto; }
+  #ui-root ::-webkit-scrollbar { width: 8px; height: 8px; }
+  #ui-root ::-webkit-scrollbar-track, #ui-root ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+  #ui-root ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid var(--scrollbar-track); border-radius: 8px; }
+}
+@media (forced-colors: active) {
+  #ui-root :is(dialog, #level-menu, #card-bar, .help-box) { scrollbar-color: auto; scrollbar-width: auto; }
+}
 button, select, input { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #a8f0e4; outline-offset: 4px; }
@@ -68,9 +79,9 @@ kbd { font: inherit; display: inline-block; border: 1px solid #bdcdbb4d; border-
 .menu-footer i { font-style: normal; margin-inline: 9px; color: #78967b; }
 
 dialog { color: var(--office-paper); }
-dialog::backdrop { background: #0c241ec4; backdrop-filter: blur(5px); }
+dialog::backdrop { background: #0c241ec4; backdrop-filter: blur(5px); overflow: hidden; overscroll-behavior: contain; }
 dialog:not([open]) { display: none !important; }
-:is(#wave-banner, #toast, #card-tooltip, #entity-feedback, #tutorial-tip, #niu-modal, #renderer-status):not(.show) { visibility: hidden; }
+:is(#wave-banner, #toast, #card-tooltip, #entity-feedback, #tutorial-tip, #niu-modal, #renderer-status, #boss-warning, #boss-skill-alert):not(.show) { visibility: hidden; }
 #settings-dialog, #level-result, #pause-overlay { position: fixed; inset: 0; margin: auto; border: 1px solid #abc5995e; border-radius: 19px; background: var(--office-deep); width: min(480px, calc(100% - 32px)); max-width: none; height: fit-content; max-height: calc(100dvh - 32px); padding: 0; box-shadow: 0 28px 90px #071e2790; overflow-y: auto; cursor: default; }
 #settings-dialog { width: min(460px, calc(100% - 32px)); }
 .settings-box { padding: 28px; }
@@ -111,6 +122,32 @@ dialog:not([open]) { display: none !important; }
 .result-actions { display: grid; gap: 10px; }
 #help-overlay { position: fixed; inset: 0; margin: auto; width: min(640px, calc(100% - 28px)); max-height: calc(100dvh - 28px); height: fit-content; border: 1px solid var(--office-line); padding: 0; border-radius: 16px; background: var(--office-deep); overflow-y: auto; }
 #help-overlay .help-box { width: 100%; max-width: none; max-height: none; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+#help-overlay .help-box { box-sizing: border-box; overflow: visible; min-width: 0; animation: none; }
+dialog:modal { overscroll-behavior: contain; }
+#help-overlay { max-width: none; }
+#help-overlay[open] { display: block; }
+.help-title:focus, #briefing-title:focus { outline: none; }
+.help-close { min-height: 44px; }
+#level-briefing { position: fixed; inset: 0; margin: auto; width: min(500px, calc(100% - 28px)); max-width: none; max-height: calc(100dvh - 28px); border: 1px solid var(--office-line); border-radius: 16px; padding: 0; background: var(--office-deep); overflow-y: auto; }
+.briefing-content { padding: 26px; }
+.briefing-content h2 { font-size: 23px; line-height: 1.5; margin-bottom: 14px; text-wrap: balance; }
+.briefing-content p { font-size: 13px; line-height: 1.9; color: var(--office-muted); }
+.briefing-content dl { margin-block: 20px; }
+.briefing-content dl > div { padding-block: 12px; border-top: 1px solid var(--office-line); }
+.briefing-content dt { font-size: 11px; color: var(--office-gold); margin-bottom: 6px; }
+.briefing-content dd { font-size: 13px; line-height: 1.8; margin: 0; }
+.briefing-content .briefing-note { font-size: 11px; margin-bottom: 20px; }
+.briefing-content button { width: 100%; }
+
+#card-dock { position: absolute; left: 16px; bottom: max(14px, env(safe-area-inset-bottom)); max-width: min(calc(100% - 260px), 1120px); display: flex; align-items: stretch; gap: 4px; }
+body:not(.in-game) #card-dock { display: none; }
+#card-dock #card-bar { position: static; min-width: 0; max-width: 100%; flex: 1 1 auto; box-sizing: border-box; }
+#card-dock.has-overflow #card-bar { max-width: calc(100% - 76px); }
+.card-page { flex: 0 0 34px; width: 34px; border: 1px solid var(--office-line); border-radius: 9px; color: var(--office-paper); background: var(--office-panel); font-size: 28px; cursor: pointer; }
+.card-page:disabled { color: #91a99a; background: #203a33; }
+.card { -webkit-user-select: none; user-select: none; }
+.card:not(.skill-card):not(.ult-card):not(.ticket-card) { touch-action: pan-x; }
+#level-menu { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); padding-bottom: env(safe-area-inset-bottom); }
 
 #hp-value { font-size: 12px; color: #f7e6bd; font-variant-numeric: tabular-nums; min-width: 23px; }
 #card-bar { padding: 9px; gap: 8px; max-width: min(calc(100% - 260px), 1120px); }
@@ -136,6 +173,7 @@ dialog:not([open]) { display: none !important; }
 .reduced-motion :is(#patrol-flash, #white-flash, #poison-overlay, #rain-overlay) { display: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (max-width: 1000px) {
+  #card-dock { left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); max-width: calc(100% - 160px - env(safe-area-inset-right)); }
   .card { width: 62px; min-width: 62px; height: 82px; }
   .card-name { font-size: 8px; }
   .card-icon { width: 36px; height: 31px; margin-top: 5px; }
@@ -175,6 +213,7 @@ dialog:not([open]) { display: none !important; }
   #onboarding > p { font-size: 10px; }
 }
 @media (max-width: 540px) {
+  #card-dock { right: max(8px, env(safe-area-inset-right)); max-width: none; }
   .guide-wide { display: none; }
   .guide-portrait { display: inline; }
   #wave-total { font-size: 11px; }
@@ -195,7 +234,7 @@ dialog:not([open]) { display: none !important; }
   .mission-card { padding: 13px 11px 10px; }
   .mission-bottom { font-size: 9px; }
 }
-@media (max-height: 580px) and (min-width: 721px) {
+@media (max-height: 580px) and (orientation: landscape) {
   #toast, #wave-banner { left: 63%; max-width: min(420px, 55vw); }
   .menu-header { padding-block: 12px; }
   .menu-body { padding-block: 20px; }
@@ -207,4 +246,29 @@ dialog:not([open]) { display: none !important; }
   .mission-bottom { margin-top: 9px; padding-top: 7px; }
   #onboarding { top: 108px; width: 210px; }
   #onboarding p { display: none; }
+}
+@media (pointer: coarse) {
+  .card-page { flex-basis: 44px; width: 44px; }
+  #card-dock.has-overflow #card-bar { max-width: calc(100% - 96px); }
+  .cam-btn, .gc-btn, .gc-speed, #help-btn, #onboarding > button, .icon-button { min-width: 44px; min-height: 44px; }
+  .cam-btn { padding-inline: 5px; }
+  #cam-switch { left: max(8px, env(safe-area-inset-left)); }
+  #game-controls, #help-btn, #rage-bar { right: max(8px, env(safe-area-inset-right)); }
+  #help-btn { bottom: calc(68px + env(safe-area-inset-bottom)); }
+  #game-controls { bottom: max(8px, env(safe-area-inset-bottom)); }
+  #card-dock { max-width: calc(100% - 205px - env(safe-area-inset-right)); }
+  #onboarding > strong { padding-right: 32px; }
+  @media (max-width: 540px) {
+    #rage-bar { top: 120px; }
+    #card-dock { max-width: none; }
+    #game-controls { bottom: calc(108px + env(safe-area-inset-bottom)); }
+    #help-btn { bottom: calc(168px + env(safe-area-inset-bottom)); }
+    #placement-status { bottom: calc(218px + env(safe-area-inset-bottom)); }
+  }
+}
+@media (max-width: 540px) and (max-height: 700px) {
+  #onboarding { top: 176px; min-height: 44px; box-sizing: border-box; padding: 10px 13px; }
+  #onboarding > span, #onboarding > p { display: none; }
+  #onboarding > strong { padding-right: 32px; line-height: 1.5; }
+  #onboarding > button { top: 0; right: 0; width: 44px; height: 44px; }
 }

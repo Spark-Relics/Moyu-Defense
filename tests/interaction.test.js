@@ -105,6 +105,17 @@ test('touch deployment commits on release, allowing finger adjustment before spe
   assert.equal(g.plants[0].col, 4);
 });
 
+test('touch card swipes remain native scrolling and never capture or spend on pointerdown', () => {
+  const { g, interaction } = setup();
+  let captures = 0, selections = 0;
+  g._onCardClick = () => selections++;
+  const handled = interaction.gestures.startCard({ button: 0, pointerType: 'touch', pointerId: 1 }, 'sunflower', { setPointerCapture: () => captures++ });
+  assert.equal(handled, false);
+  assert.equal(captures, 0); assert.equal(selections, 0);
+  assert.equal(g.resource.value, 100);
+  assert.equal(interaction.gestures.active, null);
+});
+
 test('entire board and landmarks stay within HUD margins at portrait and landscape sizes', () => {
   for (const [width, height] of [[390, 844], [716, 920], [1440, 900], [844, 390]]) {
     const phi = 0.65, halfWidth = 27.9, halfDepth = 15;

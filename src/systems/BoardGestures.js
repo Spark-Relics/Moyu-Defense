@@ -18,6 +18,9 @@ export class BoardGestures {
 
   startCard(event, type, owner) {
     const g = this.game;
+    // Touch users tap to select and swipe the tray to browse. Capturing here
+    // would turn a horizontal inventory swipe into an accidental deployment.
+    if (event.pointerType === 'touch') return false;
     if (event.button !== 0 || event.isPrimary === false || this.active || !g.ui.canInteract()) return false;
     const wasSelected = g.selectedCard === type;
     if (!wasSelected) g._onCardClick(type);

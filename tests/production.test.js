@@ -8,6 +8,22 @@ import { advanceSimulation, STEP } from '../src/utils/Simulation.js';
 import { disposeObject } from '../src/utils/disposeObject.js';
 import { AudioSystem } from '../src/systems/AudioSystem.js';
 import { findProjectileTarget } from '../src/utils/ProjectileCollision.js';
+import { EventSystem } from '../src/systems/EventSystem.js';
+
+test('event choices allow twelve simulation seconds to read and commit only once', () => {
+  let applications = 0, callback;
+  const game = { ui: { showNiuEvent: (_event, choose) => { callback = choose; }, hideNiuEvent() {} }, toast() {} };
+  const events = new EventSystem(game);
+  events._spawnGhost = () => {};
+  events.pool = [{ title: 'test', options: [{ worst: true, effect: () => applications++ }] }];
+  events.trigger(40);
+  assert.equal(events.decisionEnd, 52);
+  events.update(1, 51.99);
+  assert.equal(applications, 0);
+  callback(0);
+  events.update(1, 52);
+  assert.equal(applications, 1);
+});
 
 function memoryStorage() {
   const map = new Map();

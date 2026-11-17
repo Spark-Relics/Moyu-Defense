@@ -50,6 +50,7 @@ test('all ten campaigns advance through all six levels and end with the final wi
     assert.deepEqual(rows.map(row => row.level), [1, 2, 3, 4, 5, 6]);
     for (const row of rows) {
       assert.equal(row.result, 'win'); assert.equal(row.unlocked, Math.min(row.level + 1, 6));
+      assert.equal(row.briefingShown, row.level > 1, 'next-level flow must pass through the new briefing');
     }
     assert.equal(rows[5].resultTitle, '年终通关，准时下班！');
     assert.equal(rows[5].nextButton, false); assert.equal(rows[5].cardCount, 17);

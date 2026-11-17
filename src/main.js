@@ -107,6 +107,7 @@ class Game {
     this.ui.onResume = () => this._togglePause();
     this.ui.onRestart = () => this.startLevel(this.levels.currentLevelId);
     this.ui.onMenu = () => this.returnToMenu();
+    this.ui.onDecisionOpen = () => { if (this.speedMul > 1) this._setSpeed(1); };
     this._applySettings();
     matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => this._applySettings());
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('debug')) {
@@ -225,6 +226,9 @@ class Game {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.isContentEditable) return;
       if (this.settingsUI?.open) return;
+      // Let native dialogs handle Escape and focused-button activation.
+      // The board shortcut handler must not cancel their default behavior.
+      if (document.querySelector('dialog[open]')) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         if (this.ui.dismissTopOverlay()) return;
@@ -365,6 +369,10 @@ class Game {
 
   _setSpeed(spd) {
     if (!this.running) return;
+    if (spd > 1 && this.ui.isNiuActive()) {
+      this.ui.toast('先完成事件选择，再切换倍速');
+      return;
+    }
     this.speedMul = spd;
     for (const s of [1, 2, 3]) {
       const btn = document.getElementById('gc-speed-' + s);
@@ -530,7 +538,7 @@ class Game {
     this._orbitTarget.set(0, 0, 0);
     const halfW = (CFG.COLS / 2 + 1.8) * CFG.CELL;
     const halfD = (CFG.ROWS / 2 + 0.85) * CFG.CELL;
-    const compact = window.innerHeight < 560 && window.innerWidth > 700;
+    const compact = window.innerHeight < 560 && window.innerWidth > window.innerHeight;
     if (compact) this.camera.setViewOffset(window.innerWidth, window.innerHeight, -window.innerWidth * .13, 0, window.innerWidth, window.innerHeight);
     else this.camera.clearViewOffset();
     const radius = getBoardOrbitRadius({ halfWidth: halfW, halfDepth: halfD,

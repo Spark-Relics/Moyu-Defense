@@ -43,7 +43,7 @@ export class LevelUI {
     menu.querySelector('.game-wordmark').addEventListener('click', event => event.preventDefault());
     menu.querySelector('.menu-help').addEventListener('click', () => this.onHelp?.());
     menu.querySelector('.menu-settings').addEventListener('click', () => this.onSettings?.());
-    menu.querySelector('#start-shift').addEventListener('click', () => this.onStartLevel?.(Math.min(this.levelSystem.maxUnlocked, LEVELS.length)));
+    menu.querySelector('#start-shift').addEventListener('click', () => this.prepareLevel(Math.min(this.levelSystem.maxUnlocked, LEVELS.length)));
   }
 
   showMenu() {
@@ -78,9 +78,34 @@ export class LevelUI {
         <div class="mission-top"><span class="mission-number">${String(level.id).padStart(2, '0')}</span><span class="mission-state">${locked ? '待解锁' : cleared ? `已通关 · ${record.grade} 级` : current ? '当前挑战' : '可挑战'}</span><span class="mission-symbol" aria-hidden="true">${locked ? '◇' : cleared ? '✓' : '↗'}</span></div>
         <h3>${level.name}</h3><p>${level.desc}</p>
         <div class="mission-bottom"><span>${level.waves.length} 波来袭</span><span>${locked ? '通关上一关解锁' : cleared ? `最高 ${record.score.toLocaleString()} 分` : `开局 ${level.startResource} 摸鱼值`}</span></div>`;
-      card.addEventListener('click', () => this.onStartLevel?.(level.id));
+      card.addEventListener('click', () => this.prepareLevel(level.id));
       this.grid.appendChild(card);
     }
+  }
+
+  prepareLevel(id) {
+    document.getElementById('level-briefing')?.remove();
+    const level = LEVELS.find(level => level.id === id);
+    if (!level || !this.levelSystem.isUnlocked(id)) return;
+    const tips = [
+      '先在右侧种向日葵积攒资源，再把射手放在敌人同行。射手朝左攻击；五行都要有人守。',
+      'KPI 会持续扣工位生命，优先集火。坚果放在射手左侧挡路，换鱼锤可打断危险敌人。',
+      '甲方更频繁地后退和冲锋。审批员可以减速；随时把已有射手免费换到受压的一行。',
+      '老板会蓄力开除植物，看到提示及时用换鱼锤打断。留一部分资源和续命咖啡救急。',
+      '叛徒会策反向日葵。分散经济来源，善用本关应急日报的免疫时间，给前排补上坚果。',
+      '先建立五行输出，再用审批员和坚果支援。给最终首领保留年终奖炸弹，怒气满时可用大招。',
+    ];
+    const fresh = id > 1 ? LEVELS[id - 2].unlocks : ['sunflower', 'peashooter'];
+    const dialog = document.createElement('dialog');
+    dialog.id = 'level-briefing';
+    dialog.setAttribute('aria-labelledby', 'briefing-title');
+    dialog.innerHTML = `<div class="briefing-content"><p class="panel-eyebrow">上岗前，先看一眼防线</p><h2 id="briefing-title" tabindex="-1" autofocus>${level.icon} 第 ${id} 关 · ${level.name}</h2><p>${tips[id - 1]}</p><dl><div><dt>本关目标</dt><dd>守住工位，击退 ${level.waves.length} 波敌人</dd></div><div><dt>${id === 1 ? '基础搭子' : '新解锁'}</dt><dd>${fresh.map(type => PLANT_TYPES[type]?.name || type).join('、')}</dd></div><div><dt>本关特供 · ${level.special.limit} 次</dt><dd>${level.special.name}：${level.special.desc}</dd></div></dl><p class="briefing-note">阅读时战斗尚未开始。卡牌可点选后点空格部署；两侧箭头可翻看全部卡牌。战斗中点 ? 可暂停查看完整说明。</p><button type="button" class="primary-button briefing-start">开始本关</button><button type="button" class="text-button briefing-menu">返回选关</button></div>`;
+    document.getElementById('ui-root').appendChild(dialog);
+    const close = callback => { dialog.close(); dialog.remove(); callback?.(); };
+    dialog.querySelector('.briefing-start').addEventListener('click', () => close(() => this.onStartLevel?.(id)));
+    dialog.querySelector('.briefing-menu').addEventListener('click', () => close(() => this.onBackToMenu?.()));
+    dialog.addEventListener('cancel', event => { event.preventDefault(); close(() => this.onBackToMenu?.()); });
+    dialog.showModal();
   }
 
   showResult(grade, level, maxUnlocked, failed = false, hpRatio = 0) {
@@ -103,7 +128,7 @@ export class LevelUI {
       </div>`;
     document.getElementById('ui-root').appendChild(result);
     const act = callback => { result.close(); result.remove(); callback?.(); };
-    result.querySelector('.result-next')?.addEventListener('click', () => act(() => this.onNextLevel?.(level.id + 1)));
+    result.querySelector('.result-next')?.addEventListener('click', () => act(() => this.prepareLevel(level.id + 1)));
     result.querySelector('.result-retry').addEventListener('click', () => act(() => this.onRetry?.()));
     result.querySelector('.result-menu').addEventListener('click', () => act(() => this.onBackToMenu?.()));
     result.addEventListener('cancel', event => { event.preventDefault(); act(() => this.onBackToMenu?.()); });
