@@ -26,6 +26,7 @@ function loadCharacterSource(type) {
 }
 
 export function preloadCharacterModels(types = ['sunflower', 'peashooter', 'client']) {
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('balance')) return;
   for (const type of new Set(types)) {
     if (!characterSources[type]) continue;
     loadCharacterSource(type).catch((error) => {
@@ -69,6 +70,7 @@ function getBindPoseBounds(asset) {
 }
 
 async function attachCharacterModel(entity, type, fallbackParts, parent) {
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('balance')) return null;
   try {
     const gltf = await loadCharacterSource(type);
     if (entity.dead || !entity.mesh.parent) return null;

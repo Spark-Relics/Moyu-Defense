@@ -145,6 +145,16 @@ test('an empty final wave cannot award a win to a destroyed base', () => {
   assert.equal(levels.records[1].grade, 'F'); assert.equal(levels.maxUnlocked, 1);
 });
 
+test('only a completed level banks its ticket rewards for later rounds', () => {
+  for (const cleared of [true, false]) {
+    const { game, levels } = setupLevel();
+    levels.startLevel(1); game.tickets = 7; game.bankedTickets = 2;
+    if (cleared) levels._onLevelClear(game);
+    else levels.onLevelFail(game);
+    assert.equal(game.bankedTickets, cleared ? 7 : 2);
+  }
+});
+
 test('limited special uses cannot exceed the per-round allowance and reset on retry', () => {
   const { levels } = setupLevel();
   levels.startLevel(1);

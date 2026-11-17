@@ -76,13 +76,17 @@ export class Plant {
   build() {}
 
   update(dt, game) {
+    if (this.shieldTimer > 0) {
+      this.shieldTimer = Math.max(0, this.shieldTimer - dt);
+      if (this.shieldTimer === 0) this.shieldHp = 0;
+    }
+    if (this.invincible > 0) this.invincible = Math.max(0, this.invincible - dt);
     if (this.frozen > 0) {
       this.frozen -= dt;
       this.mesh.position.y = Math.sin(performance.now() * 0.01) * 0.05;
       this.applyColorTint(0x88aaff);
       return;
     }
-    if (this.invincible > 0) this.invincible -= dt;
     this.timer += dt;
     this.idle();
     this.behavior(dt, game);
@@ -106,7 +110,11 @@ export class Plant {
   behavior(dt, game) {}
 
   takeDamage(d) {
+    if (this.dead) return;
     if (this.invincible > 0) return;
+    const absorbed = this.shieldTimer > 0 ? Math.min(this.shieldHp || 0, d) : 0;
+    this.shieldHp = Math.max(0, (this.shieldHp || 0) - absorbed);
+    d -= absorbed;
     this.hp -= d;
     this.hitFlash = 0.12;
     if (this.hp <= 0) this.dead = true;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isBoss } from '../utils/CombatRules.js';
 
 /**
  * 道具系统：实现优化方案中四大类道具的全部效果。
@@ -19,16 +20,32 @@ export class ItemSystem {
     this.reportTimer = 0;   // 日报持续剩余
     this.ultMoyuTimer = 0;  // 终极摸鱼持续剩余
     this.plantStopTimer = 0;// 甩锅闪腰：植物停止攻击剩余
+    this.meetingTimer = 0;
+    this.meetingTargets = [];
+    this.bombBursts = 0;
+    this.bombTimer = 0;
   }
 
   update(dt, game) {
+    if (this.meetingTimer > 0) {
+      this.meetingTimer = Math.max(0, this.meetingTimer - dt);
+      if (this.meetingTimer === 0) {
+        for (const zombie of this.meetingTargets) if (!zombie.dead && !isBoss(zombie) && game.zombies.includes(zombie)) zombie.takeDamage(zombie.hp);
+        this.meetingTargets = [];
+        game.ui.toast('会议结束！参会的普通僵尸已被清除，Boss 继续进攻');
+      }
+    }
+    if (this.bombBursts > 0) {
+      this.bombTimer -= dt;
+      if (this.bombTimer <= 0) {
+        this.bombTimer += .2; this.bombBursts--;
+        game.particles.spawnDeath(game.grid.group, new THREE.Vector3((Math.random() - .5) * 20, .5, (Math.random() - .5) * 16));
+      }
+    }
     // 天气倒计时
     if (this.weatherTimer > 0) {
       this.weatherTimer -= dt;
       if (this.weatherTimer <= 0) { this.weatherType = null; game.ui.setWeather(false); }
-      else { // 暴雨减速60%
-        for (const z of game.zombies) { if (!z.dead && z.stunned <= 0) z.speed = z.baseSpeed * 0.4; }
-      }
     }
     // 日报倒计时
     if (this.reportTimer > 0) {
@@ -76,10 +93,10 @@ export class ItemSystem {
     });
     if (alive.length === 0) { game.ui.toast('场上没有僵尸可砸！'); return false; }
     const target = alive[0];
+    target.takeDamage(60);
     const interrupted = target.interruptBossCast ? target.interruptBossCast(game) : false;
     target.stunned = 3;
-    target.doubleDamage = true;
-    target.takeDamage(60); // 锤子额外伤害
+    target.vulnerableFor = Math.max(target.vulnerableFor || 0, 3);
     // 锤子飞行特效
     const p = target.mesh.position.clone(); p.y += 1.5;
     game.effects.spawnFloatText(game.grid.group, p, '🔨改PPT!', '#ff8800');
@@ -127,8 +144,7 @@ export class ItemSystem {
     for (const z of game.zombies) {
       if (z.dead) continue;
       z.stunned = 3;
-      z.hp -= z.maxHp * 0.1;
-      if (z.hp <= 0) z.dead = true;
+      z.takeDamage(z.maxHp * 0.1);
     }
     game.ui.flashWhite();
     game.particles.spawnUlt(game.grid.group);
@@ -170,8 +186,7 @@ export class ItemSystem {
             if (z2.dead || z2.row !== m.row) continue;
             if (Math.abs(z2.mesh.position.x - m.x) < 2.5) {
               z2.takeDamage(80);
-              z2.stunned = 0; // 不眩晕但减速
-              z2._slowTimer = 4; // 自定义减速
+              game._applySlow(z2, .5, 4);
             }
           }
           game.particles.spawnDeath(game.grid.group, m.mesh.position.clone());
@@ -186,16 +201,15 @@ export class ItemSystem {
 
   /** 调休单护盾：给最前排植物套500伤害护盾10秒 */
   tiaoxiu(game) {
-    // 找最前排(最大col)的植物
+    // 来袭方向在左，列号更小的植物才是前排。
     let target = null;
     for (const p of game.plants) {
       if (p.dead) continue;
-      if (!target || p.col > target.col) target = p;
+      if (!target || p.col < target.col) target = p;
     }
     if (!target) { game.ui.toast('没有植物可套护盾'); return false; }
     target.shieldHp = 500;
     target.shieldTimer = 10;
-    target.invincible = 10;
     const pos = target.mesh.position.clone(); pos.y += 1.2;
     game.effects.spawnFloatText(game.grid.group, pos, '调休护盾', '#66ccff');
     game.ui.toast('📋 调休单护盾！最前排植物+500护盾10秒');
@@ -212,7 +226,10 @@ export class ItemSystem {
     );
     mesh.position.set(pos.x, 0.1, pos.z);
     game.grid.group.add(mesh);
-    this.baits.push({ mesh, row, x: pos.x, hp: 5, life: 15 });
+    this.baits.push({ mesh, row, x: pos.x, hp: 80, life: 15,
+      get dead() { return this.hp <= 0 || this.life <= 0; },
+      takeDamage(amount) { this.hp = Math.max(0, this.hp - amount); },
+    });
     game.ui.toast('🥞 大饼诱饵！僵尸都去吃饼了');
     return true;
   }
@@ -221,18 +238,6 @@ export class ItemSystem {
     for (let i = this.baits.length - 1; i >= 0; i--) {
       const b = this.baits[i];
       b.life -= dt;
-      // 让同行僵尸朝大饼走
-      for (const z of game.zombies) {
-        if (z.dead || z.row !== b.row) continue;
-        const dx = b.x - z.mesh.position.x;
-        if (Math.abs(dx) < 1.0) {
-          // 啃食大饼
-          b.hp -= dt * 2;
-        } else if (dx > 0) {
-          // 向右走向大饼
-          z.mesh.position.x += z.speed * dt;
-        }
-      }
       if (b.hp <= 0 || b.life <= 0) {
         game.grid.group.remove(b.mesh);
         b.mesh.geometry.dispose(); b.mesh.material.dispose();
@@ -294,25 +299,17 @@ export class ItemSystem {
 
   /** 紧急会议：全屏僵尸集合开会，5秒后非Boss暴毙 */
   ultMeeting(game) {
-    if (game.zombies.length === 0) { game.ui.toast('没有僵尸可开会'); return false; }
+    if (this.meetingTimer > 0) { game.ui.toast('会议还在进行中'); return false; }
+    const targets = game.zombies.filter(z => !z.dead);
+    if (targets.length === 0) { game.ui.toast('没有僵尸可开会'); return false; }
+    this.meetingTargets = targets;
+    this.meetingTimer = 5;
     for (const z of game.zombies) {
       if (z.dead) continue;
       z.mesh.position.x = 0 + (Math.random() - 0.5) * 2;
       z.stunned = 5;
     }
     game.ui.toast('📢 紧急会议！5秒后非Boss僵尸被无聊死');
-    // 5秒后执行
-    setTimeout(() => {
-      if (!game.running) return;
-      for (const z of game.zombies) {
-        if (z.dead || z.type === 'boss') continue;
-        z.hp = 0;
-        z.dead = true;
-        game.particles.spawnDeath(game.grid.group, z.mesh.position.clone());
-      }
-      game.ui.toast('💀 会议结束！僵尸被无聊死了');
-      game.audio.play('die');
-    }, 5000);
     return true;
   }
 
@@ -325,13 +322,7 @@ export class ItemSystem {
       z.stunned = 3; // 卡顿效果
     }
     // 全屏炸弹粒子
-    for (let i = 0; i < 5; i++) {
-      setTimeout(() => {
-        if (!game.running) return;
-        const pos = new THREE.Vector3((Math.random() - 0.5) * 20, 0.5, (Math.random() - 0.5) * 16);
-        game.particles.spawnDeath(game.grid.group, pos);
-      }, i * 200);
-    }
+    this.bombBursts = 5; this.bombTimer = 0;
     game.ui.toast('💣 钉钉轰炸！全屏炸弹+卡顿减速');
     game.audio.play('die');
     return true;
@@ -350,11 +341,11 @@ export class ItemSystem {
 
   /** 已读乱回：对Boss扣20%最大血量 */
   readback(game) {
-    const bosses = game.zombies.filter((z) => !z.dead && z.type === 'boss');
+    const bosses = game.zombies.filter((z) => !z.dead && isBoss(z));
     if (bosses.length === 0) { game.ui.toast('场上没有Boss可已读乱回'); return false; }
     for (const b of bosses) {
       const dmg = b.maxHp * 0.2;
-      b.hp -= dmg;
+      b.takeDamage(dmg);
       const p = b.mesh.position.clone(); p.y += 2;
       game.effects.spawnFloatText(game.grid.group, p, '-' + Math.round(dmg), '#ff3333');
     }
@@ -424,5 +415,7 @@ export class ItemSystem {
     this.reportMul = 1; this.reportTimer = 0;
     this.ultMoyuTimer = 0; this.plantStopTimer = 0;
     this.emergencyReportTimer = 0;
+    this.meetingTimer = 0; this.meetingTargets = [];
+    this.bombBursts = 0; this.bombTimer = 0;
   }
 }

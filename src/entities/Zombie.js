@@ -39,7 +39,7 @@ export class Zombie {
     this.hitFlash = 0;
     this.walkPhase = Math.random() * Math.PI * 2; // 行走相位错开
     this.stunned = 0;           // 眩晕剩余秒数(甩锅大会)
-    this.doubleDamage = false;  // 受到伤害翻倍(摸鱼锤砸)
+    this.vulnerableFor = 0; // 破防持续时间，按游戏时间消退。
     this.stunFxTimer = 0;       // 眩晕星星动画计时
     this.bossNotified = false;  // Boss变暗是否已通知
     this.bossStepTimer = 0;     // Boss步距计时
@@ -667,6 +667,9 @@ export class Zombie {
   }
 
   update(dt, game) {
+    if (this.dead) return;
+    if (this.hp <= 0) { this._die(game); return; }
+    this.vulnerableFor = Math.max(0, this.vulnerableFor - dt);
     this.aliveTime += dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.overtimeTimer > 0) this.overtimeTimer = Math.max(0, this.overtimeTimer - dt);
@@ -786,6 +789,7 @@ export class Zombie {
   }
 
   _die(game) {
+    if (this.dead) return;
     this.dead = true;
     game.particles.spawnDeath(game.grid.group, this.mesh.position.clone());
     game.audio.play('die');
@@ -1045,15 +1049,16 @@ export class Zombie {
     if (this._chargeRing) this._chargeRing.visible = false;
     this.mesh.rotation.z = 0;
     this.stunned = Math.max(this.stunned, 3);
-    this.doubleDamage = true;
+    this.vulnerableFor = Math.max(this.vulnerableFor, 3);
     game.ui.hideBossSkill();
     game.ui.toast('🔨 施法被打断！大老板破防3秒，受到双倍伤害');
     return true;
   }
 
   takeDamage(d) {
+    if (this.dead) return;
     // 摸鱼锤砸中：伤害翻倍
-    const real = this.doubleDamage ? d * 2 : d;
+    const real = this.vulnerableFor > 0 ? d * 2 : d;
     this.hp -= real;
     this.hitFlash = 0.12;
   }

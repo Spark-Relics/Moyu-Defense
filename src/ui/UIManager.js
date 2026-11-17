@@ -445,7 +445,7 @@ export class UIManager {
   }
 
   _assignCardHotkeys() {
-    const keys = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F', 'Z', 'X', 'V', 'B'];
+    const keys = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F', 'Z', 'X', 'V', 'B', 'G', 'H', 'J', 'K', 'L', 'U', 'I', 'O'];
     this.cardHotkeys = {};
     Object.entries(this.cardEls).forEach(([type, card], index) => {
       const key = keys[index];

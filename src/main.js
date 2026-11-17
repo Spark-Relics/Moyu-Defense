@@ -22,6 +22,7 @@ import { GridDebugger } from './utils/GridDebugger.js';
 import { getBoardOrbitRadius } from './utils/CameraFraming.js';
 import { advanceSimulation } from './utils/Simulation.js';
 import { findProjectileTarget } from './utils/ProjectileCollision.js';
+import { getZombieSpeed } from './utils/CombatRules.js';
 import { PlayerStorage } from './systems/PlayerStorage.js';
 import { SettingsUI } from './ui/SettingsUI.js';
 
@@ -73,6 +74,7 @@ class Game {
     // 怨气值 & 工时券
     this.rage = 0;
     this.tickets = 0;
+    this.bankedTickets = 0;
 
     // 游戏控制
     this.paused = false;
@@ -768,6 +770,7 @@ class Game {
   startLevel(levelId) {
     if (!this.levels.isUnlocked(levelId) || this._contextLost) return;
     this.finishRound();
+    this.tickets = this.bankedTickets;
     document.body.classList.add('in-game');
     this.levelUI.hideMenu();
     this.audio.ensure();
@@ -894,12 +897,14 @@ class Game {
     const slowOn = this.clock < this._zombieSlowEnd;
     for (const z of this.zombies) {
       if (z.stunned > 0) continue;
-      let speed = z.baseSpeed * (slowOn ? 0.4 : 1);
-      // 审批员减速(含抗性衰减)
-      if (z._slowEnd && this.clock < z._slowEnd) {
-        speed *= z._slowMul || 0.5;
+      if (this.clock < z._slowEnd) {
+        z._slowTotal = (z._slowTotal || 0) + dt;
+        if (z._slowTotal > 15 && !z._resistMark) {
+          z._resistMark = true;
+          this.ui.toast('僵尸持续被控制，已加急处理：审批减速效果衰减');
+        }
       }
-      z.speed = speed;
+      z.speed = getZombieSpeed(z, this.clock, { globalSlow: slowOn, rain: this.items.weatherTimer > 0 });
     }
 
     this._refreshPlantBuffs();
@@ -999,7 +1004,7 @@ class Game {
 
   getPlantBlocking(row, zombieX) {
     let best = null, bestDx = Infinity;
-    for (const p of this.plants) {
+    for (const p of [...this.plants, ...this.items.baits]) {
       if (p.dead || p.row !== row) continue;
       const dx = p.mesh.position.x - zombieX;
       if (dx > -0.1 && dx <= 0.7 && dx < bestDx) { best = p; bestDx = dx; }
@@ -1029,17 +1034,9 @@ class Game {
 
   /** 审批员减速+抗性衰减：连续减速超15秒效果减半(防无限控死Boss) */
   _applySlow(zombie, slowMul, duration) {
-    if (!zombie._slowTotal) zombie._slowTotal = 0;
-    zombie._slowTotal += duration;
+    if (!(zombie._slowEnd > this.clock)) { zombie._slowTotal = 0; zombie._resistMark = false; }
     zombie._slowEnd = this.clock + duration;
-    const resisted = zombie._slowTotal > 15;
-    zombie._slowMul = resisted ? (1 - (1 - slowMul) * 0.5) : slowMul;
-    if (resisted && !zombie._resistMark) {
-      zombie._resistMark = true;
-      const p = zombie.mesh.position.clone(); p.y += 2.2;
-      this.effects.spawnFloatText(this.grid.group, p, '加急!', '#ff6600');
-      this.ui.toast('⚠️ 僵尸被加急处理！减速效果衰减');
-    }
+    zombie._slowMul = slowMul;
   }
 
   killWeakestZombies(n) {
@@ -1143,4 +1140,7 @@ class Game {
   }
 }
 
-new Game();
+const game = new Game();
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('balance')) {
+  import('./testing/BalanceLab.js').then(({ BalanceLab }) => new BalanceLab(game));
+}

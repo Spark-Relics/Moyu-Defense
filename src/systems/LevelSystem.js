@@ -167,7 +167,7 @@ export class LevelSystem {
       z.maxHp = z.hp = Math.round(z.hp * 3);
       z.baseSpeed *= 1.5;
       z.speed = z.baseSpeed;
-      z._traitorInterval = 0.75; // 策反频率翻倍
+      z._traitorInterval = 5; // 普通大老板 10 秒，终极形态频率翻倍。
       game.zombies.push(z);
       game.audio.play('spawn_traitor');
       game.ui.toast('💀 超级大老板出现！hp×3 速度×1.5 策反翻倍！');
@@ -190,6 +190,7 @@ export class LevelSystem {
     if (game.baseHp <= 0) { this.onLevelFail(game); return; }
     const hpRatio = game.baseHp / game.cfg.BASE_HP;
     const grade = hpRatio > 0.8 ? 'S' : hpRatio > 0.6 ? 'A' : hpRatio > 0.4 ? 'B' : 'C';
+    if (Number.isInteger(game.tickets)) game.bankedTickets = game.tickets;
     // 解锁下一关
     if (this.currentLevelId >= this.maxUnlocked && this.currentLevelId < LEVELS.length) {
       this.maxUnlocked = this.currentLevelId + 1;
