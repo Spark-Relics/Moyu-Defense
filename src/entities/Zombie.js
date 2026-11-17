@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from '../utils/disposeObject.js';
 import { attachZombieModel } from '../systems/CharacterModelLoader.js';
 
 /**
@@ -1058,18 +1059,16 @@ export class Zombie {
   }
 
   destroy(game) {
+    if (this._disposed) return;
+    this._disposed = true;
+    this.modelMixer?.stopAllAction();
+    if (this.modelMixer && this.characterVisual) this.modelMixer.uncacheRoot(this.characterVisual.children[0]);
     // 大老板(终极Boss)消失时恢复亮度
     if (this.type === 'traitor' && this.bossNotified && game.onBossDie) {
       game.onBossDie();
     }
     game.grid.group.remove(this.mesh);
-    this.mesh.traverse((c) => {
-      if (c.geometry) c.geometry.dispose();
-      if (c.material) {
-        if (c.material.map) c.material.map.dispose();
-        c.material.dispose();
-      }
-    });
+    disposeObject(this.mesh);
     this.dead = true;
   }
 }

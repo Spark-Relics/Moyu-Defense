@@ -12,12 +12,15 @@ export default defineConfig({
     __UNLOCK_ALL_LEVELS__: JSON.stringify(UNLOCK_ALL_LEVELS),
   },
   server: {
-    open: true,
+    open: false,
     port: 5179,
-    host: true
+    host: '127.0.0.1'
   },
   build: {
-    target: 'esnext',
-    outDir: 'dist'
+    target: 'es2022',
+    outDir: 'dist',
+    rolldownOptions: {
+      output: { manualChunks: (id) => id.includes('/node_modules/three/') ? 'three' : undefined },
+    },
   }
 });

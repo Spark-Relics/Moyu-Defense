@@ -94,7 +94,7 @@ export const LEVELS = [
       W([{ type: 'client', count: 4, delay: 1.5 }, { type: 'kpi', count: 3, delay: 1.5 }, { type: 'boss', count: 1, delay: 0 }]),
       W([{ type: 'client', count: 3, delay: 1.5 }, { type: 'kpi', count: 2, delay: 1.5 }, { type: 'traitor', count: 2, delay: 3 }]),
     ],
-    unlocks: ['photo', 'weather'],
+    unlocks: ['photo', 'weather', 'ult_moyu', 'ult_meeting', 'ult_bomb'],
     special: { type: 'emergency_report', name: '应急日报系统', desc: '向日葵产出+100并免疫策反15秒', limit: 2 },
   },
 
@@ -115,7 +115,7 @@ export const LEVELS = [
       W([{ type: 'boss', count: 3, delay: 2.5 }, { type: 'traitor', count: 2, delay: 3 }]),
       W([{ type: 'super_traitor', count: 1, delay: 0 }]), // 超级大老板
     ],
-    unlocks: ['ult_moyu', 'ult_meeting', 'ult_bomb'],
+    unlocks: [],
     special: { type: 'year_bonus', name: '年终奖炸弹', desc: '全屏僵尸扣50%血+眩晕5秒', limit: 1 },
   },
 ];
@@ -127,7 +127,7 @@ export const BASE_PLANTS = ['sunflower', 'peashooter'];
 export function getUnlockedItems(levelId) {
   const items = [...BASE_PLANTS];
   for (const lv of LEVELS) {
-    if (lv.id <= levelId) {
+    if (lv.id < levelId) {
       if (lv.unlocks) items.push(...lv.unlocks);
     }
   }

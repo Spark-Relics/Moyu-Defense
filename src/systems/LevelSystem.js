@@ -1,5 +1,6 @@
 import { LEVELS, getLevel, getUnlockedItems } from '../levels/LevelConfig.js';
 import { PLANT_TYPES } from '../entities/Plant.js';
+import { mergeRecord } from './PlayerStorage.js';
 
 /**
  * 关卡系统：管理关卡流转、波次生成控制、解锁进度、结算评分。
@@ -8,6 +9,7 @@ import { PLANT_TYPES } from '../entities/Plant.js';
 export class LevelSystem {
   constructor(game) {
     this.game = game;
+    this.records = {};
     this.currentLevelId = 1;
     this.maxUnlocked = 1;          // 最大已解锁关卡
     this.currentLevel = null;      // 当前关卡配置
@@ -20,19 +22,18 @@ export class LevelSystem {
 
   /** 加载已解锁进度(localStorage) */
   loadProgress() {
-    try {
-      const saved = localStorage.getItem('niuma_progress');
-      if (saved) this.maxUnlocked = Math.max(1, parseInt(saved) || 1);
-    } catch (e) {}
+    const saved = this.game.storage.loadProgress();
+    this.maxUnlocked = saved.maxUnlocked;
+    this.records = saved.records;
   }
 
   saveProgress() {
-    try { localStorage.setItem('niuma_progress', String(this.maxUnlocked)); } catch (e) {}
+    return this.game.storage.saveProgress({ version: 1, maxUnlocked: this.maxUnlocked, records: this.records });
   }
 
   /** 指定关卡是否可选(vite.config.js 的 UNLOCK_ALL_LEVELS 为 true 时全解锁) */
   isUnlocked(id) {
-    return __UNLOCK_ALL_LEVELS__ || id <= this.maxUnlocked;
+    return Boolean(getLevel(id)) && ((typeof __UNLOCK_ALL_LEVELS__ !== 'undefined' && __UNLOCK_ALL_LEVELS__) || id <= this.maxUnlocked);
   }
 
   /** 获取当前关卡可用道具列表(含基础+解锁+特供) */
@@ -43,22 +44,22 @@ export class LevelSystem {
       const sp = this.currentLevel.special;
       items.push(sp.type);
       // 确保特供道具在PLANT_TYPES中有配置(动态注册)
-      if (!PLANT_TYPES[sp.type]) {
-        PLANT_TYPES[sp.type] = {
-          name: sp.name, cost: 0, hp: 0, icon: '⭐', cd: 0,
-          desc: sp.desc, isSpecial: true, isSkill: true, specialLimit: sp.limit,
-        };
-      }
+      PLANT_TYPES[sp.type] = {
+        cost: 0, hp: 0, icon: '⭐', cd: 0, ...PLANT_TYPES[sp.type],
+        name: sp.name, desc: sp.desc, isSpecial: true, isSkill: true, specialLimit: sp.limit,
+      };
     }
     return items.map((t) => ({ type: t, ...PLANT_TYPES[t] })).filter((c) => c.name);
   }
 
   /** 开始指定关卡 */
   startLevel(levelId) {
+    if (!this.isUnlocked(levelId)) return null;
     this.currentLevelId = levelId;
     this.currentLevel = getLevel(levelId);
     this.currentWaveIndex = -1;
-    this.waveTimer = 5; // 5秒准备时间后开始第一波
+    this.waveTimer = levelId === 1 ? 12 : 8;
+    this._waveClock = 0;
     this.waveSpawnQueue = [];
     this.specialUses = 0;
     this.waveCleared = false;
@@ -136,10 +137,6 @@ export class LevelSystem {
       '最终冲刺！不能输！',
     ];
     game.ui.showWaveBanner(waveNum, totalWaves, bannerTexts[Math.min(waveNum - 1, bannerTexts.length - 1)], this._getFeaturedEnemyType(wave));
-    // 第一关第一波显示教程提示
-    if (this.currentLevelId === 1 && this.currentWaveIndex === 0) {
-      setTimeout(() => game.ui.showTip('拖拽或点击底部的卡片选择植物，然后点击草地放置！向日葵社畜生产摸鱼值，PPT射手负责攻击！'), 800);
-    }
     // 第一波立即开始生成
     this._waveClock = 0;
   }
@@ -147,14 +144,10 @@ export class LevelSystem {
   _updateSpawnQueue(dt, game) {
     if (this.waveSpawnQueue.length === 0) return;
     this._waveClock = (this._waveClock || 0) + dt;
-    for (let i = this.waveSpawnQueue.length - 1; i >= 0; i--) {
-      const s = this.waveSpawnQueue[i];
-      if (this._waveClock >= s.at) {
-        this._spawnZombie(game, s.type, s.hpMul);
-        this.waveSpawnQueue.splice(i, 1);
-        // 队列清空后标记本波生成完毕
-        if (this.waveSpawnQueue.length === 0) this.waveCleared = true;
-      }
+    while (this.waveSpawnQueue.length && this._waveClock >= this.waveSpawnQueue[0].at) {
+      const spawn = this.waveSpawnQueue.shift();
+      this._spawnZombie(game, spawn.type, spawn.hpMul);
+      if (this.waveSpawnQueue.length === 0) this.waveCleared = true;
     }
   }
 
@@ -193,24 +186,31 @@ export class LevelSystem {
 
   /** 通关 */
   _onLevelClear(game) {
-    game.running = false;
+    if (!game.running) return;
+    if (game.baseHp <= 0) { this.onLevelFail(game); return; }
     const hpRatio = game.baseHp / game.cfg.BASE_HP;
     const grade = hpRatio > 0.8 ? 'S' : hpRatio > 0.6 ? 'A' : hpRatio > 0.4 ? 'B' : 'C';
     // 解锁下一关
     if (this.currentLevelId >= this.maxUnlocked && this.currentLevelId < LEVELS.length) {
       this.maxUnlocked = this.currentLevelId + 1;
-      this.saveProgress();
     }
-    // 显示结算
+    this._recordResult(game, grade, hpRatio);
+    game.finishRound();
     game.ui.showLevelResult(grade, this.currentLevel, this.maxUnlocked, false, hpRatio);
-    if (game.eventSystem) game.eventSystem.clearGhosts();
   }
 
   /** 失败 */
   onLevelFail(game) {
-    game.running = false;
+    if (!game.running) return;
+    this._recordResult(game, 'F', 0);
+    game.finishRound();
     game.ui.showLevelResult('F', this.currentLevel, this.maxUnlocked, true, 0);
-    if (game.eventSystem) game.eventSystem.clearGhosts();
+  }
+
+  _recordResult(game, grade, hpRatio) {
+    this.lastResult = { grade, hpRatio, score: game.score, kills: game.totalKills, duration: game.clock };
+    this.records[this.currentLevelId] = mergeRecord(this.records[this.currentLevelId], this.lastResult);
+    if (!this.saveProgress()) game.ui.toast('浏览器暂时无法保存进度，本次游戏仍可继续');
   }
 
   /** 特供道具是否可用 */
@@ -220,7 +220,12 @@ export class LevelSystem {
   }
 
   /** 记录特供道具使用 */
-  useSpecial() { this.specialUses++; }
+  useSpecial() {
+    if (!this.canUseSpecial()) return false;
+    this.specialUses++;
+    this.game.ui.updateSpecialUses(this.getSpecial(), this.specialUses);
+    return true;
+  }
 
   /** 获取特供道具配置 */
   getSpecial() { return this.currentLevel ? this.currentLevel.special : null; }

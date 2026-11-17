@@ -35,6 +35,7 @@ Thumbs.db
 .cache/
 .temp/
 .eslintcache
+.npm-cache/
 
 # 生成产物
 generated-images/

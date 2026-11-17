@@ -138,9 +138,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #14100c;
 .card:hover { transform: translateY(-3px); border-color: var(--ui-gold); box-shadow: 0 13px 24px rgba(0,0,0,.34), 0 0 18px rgba(247,201,72,.22); }
 .card.selected { border-color: #ffe08a; box-shadow: 0 0 0 2px rgba(247,201,72,.22), 0 0 24px rgba(247,201,72,.42), inset 0 0 12px rgba(247,201,72,.14); }
 .card.selected::after { content: ''; position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; background: url('./assets/vendor/kenney-ui-pack/png/star-yellow.png') center/contain no-repeat; filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
-.card.disabled { filter: saturate(.2) brightness(.45) !important; cursor: not-allowed; box-shadow: inset 0 0 34px rgba(0,0,0,.72), inset 0 0 10px rgba(0,0,0,.6); }
+.card.disabled { filter: saturate(.3) brightness(.78) !important; cursor: not-allowed; box-shadow: inset 0 0 20px rgba(0,0,0,.3); }
 .card.disabled .card-cost { color: #ff8a7a; background: rgba(40,8,8,.72); }
-.card.disabled .card-name { color: rgba(210,210,210,.5); }
+.card.disabled .card-name { color: #f0e9d8; }
 .card-icon { margin-top: 7px; line-height: 1; width: 46px; height: 42px; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; }
 .card-icon svg { width: 42px; height: 42px; display: block; filter: drop-shadow(0 3px 4px rgba(0,0,0,.5)); }
 .card-name { font-size: 10px; text-align: center; margin-top: 5px; line-height: 1.15; color: rgba(255,241,218,.95); font-weight: 900; position: relative; z-index: 1; text-shadow: 0 2px 3px rgba(0,0,0,.55); }

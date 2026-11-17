@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from '../utils/disposeObject.js';
 
 /**
  * 植物配置表
@@ -121,11 +122,12 @@ export class Plant {
   }
 
   destroy(game) {
+    if (this._disposed) return;
+    this._disposed = true;
+    this.modelMixer?.stopAllAction();
+    if (this.modelMixer && this.characterVisual) this.modelMixer.uncacheRoot(this.characterVisual.children[0]);
     game.grid.group.remove(this.mesh);
-    this.mesh.traverse((c) => {
-      if (c.geometry) c.geometry.dispose();
-      if (c.material) c.material.dispose();
-    });
+    disposeObject(this.mesh);
     this.dead = true;
   }
 }

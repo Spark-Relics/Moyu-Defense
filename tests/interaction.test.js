@@ -220,3 +220,41 @@ test('empty ground only pans after the drag threshold and never deploys', () => 
   assert.equal(g.resource.value, 100);
   assert.equal(g.plants.length, 0);
 });
+
+test('keyboard tile selection is bounded and Enter deploys once with normal costs', () => {
+  const { g, interaction } = setup();
+  const press = key => interaction._onBoardKeyDown({ key, preventDefault() {} });
+  for (let i = 0; i < 20; i++) { press('ArrowUp'); press('ArrowRight'); }
+  assert.deepEqual(interaction.keyboardTile, { row: 0, col: 8 });
+  press('Enter'); press('Enter');
+  assert.equal(g.plants.length, 1); assert.equal(g.resource.value, 75);
+  assert.equal(g.plants[0].col, 8);
+});
+
+test('keyboard deployment cannot bypass pause or a blocked interaction', () => {
+  const { g, interaction } = setup();
+  for (const state of ['paused', 'blocked']) {
+    g[state] = true;
+    interaction._onBoardKeyDown({ key: 'Enter', preventDefault() {} });
+    assert.equal(g.plants.length, 0); assert.equal(g.resource.value, 100);
+    g[state] = false;
+  }
+});
+
+test('compact landscape framing uses the right-hand play area without covering the card tray', () => {
+  const width = 844, height = 390, phi = .65;
+  const radius = getBoardOrbitRadius({ halfWidth: 18.9, halfDepth: 10.05, phi, fov: 45, aspect: width / height, height, verticalReserve: 150, headroom: 1, safeX: .64 });
+  const camera = new THREE.PerspectiveCamera(45, width / height, .1, 200);
+  camera.setViewOffset(width, height, -width * .13, 0, width, height);
+  camera.position.set(0, radius * Math.cos(phi), radius * Math.sin(phi));
+  camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+  const points = [];
+  for (const x of [-18.9, 18.9]) for (const z of [-10.05, 10.05]) for (const y of [0, 3]) {
+    const ndc = new THREE.Vector3(x, y, z).project(camera);
+    const px = (ndc.x + 1) * width / 2, py = (1 - ndc.y) * height / 2;
+    assert.ok(px >= 250 && px <= width - 20, 'board must stay right of the card tray and inside the viewport');
+    assert.ok(py >= 80 && py <= height - 75, 'board must stay clear of the HUD');
+    points.push(px);
+  }
+  assert.ok(Math.max(...points) - Math.min(...points) > 470, 'board must remain large enough to play');
+});

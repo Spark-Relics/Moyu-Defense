@@ -1,9 +1,12 @@
 {
   "name": "pvz-niuma",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
-  "description": "植物大战僵尸：牛马版 - Three.js 3D塔防游戏",
+  "description": "摸鱼保卫战 - Three.js 办公室生存塔防游戏",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "test": "node --test tests/*.test.js",
     "dev": "vite",
@@ -14,6 +17,6 @@
     "three": "^0.160.0"
   },
   "devDependencies": {
-    "vite": "^4.5.5"
+    "vite": "8.3.8"
   }
 }

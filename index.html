@@ -2,12 +2,20 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>植物大战僵尸：牛马版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#183c33" />
+  <meta name="description" content="摸鱼保卫战：在 3D 办公室沙盘里部署牛马搭子，抵挡甲方和老板，挑战 6 道防线，争取准时下班。" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>摸鱼保卫战 · 守住工位，准时下班</title>
+  <style>
+    #boot-screen{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:#183c33;color:#f5f0dd;font:14px/1.8 system-ui,sans-serif;text-align:center;padding:24px}#boot-screen strong{display:block;font-size:30px;margin-bottom:12px}#boot-screen p{color:#bbcebf;max-width:420px}#boot-screen button{padding:12px 28px;border:0;border-radius:8px;background:#f1c45c;color:#183c33;font:700 15px system-ui;cursor:pointer;margin-top:20px}
+  </style>
 </head>
 <body>
   <div id="ui-root"></div>
-  <canvas id="game-canvas"></canvas>
-  <script type="module" src="/src/main.js"></script>
+  <canvas id="game-canvas" tabindex="0" aria-label="办公室防线，5 行 9 列" aria-describedby="board-instructions"></canvas>
+  <p id="board-instructions" class="sr-only">敌人从左侧来袭，工位位于右侧。按卡牌快捷键选卡，聚焦棋盘后用方向键选择格子，按回车部署，按 Esc 取消。</p>
+  <div id="boot-screen" role="status"><div><strong>摸鱼保卫战</strong><p>正在整理工位，准备迎接你的搭子…</p><noscript>请启用 JavaScript 后刷新页面，开始游戏。</noscript></div></div>
+  <script type="module" src="/src/bootstrap.js"></script>
 </body>
 </html>

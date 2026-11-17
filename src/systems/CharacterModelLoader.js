@@ -17,13 +17,17 @@ const sourcePromises = new Map();
 
 function loadCharacterSource(type) {
   if (!sourcePromises.has(type)) {
-    sourcePromises.set(type, loader.loadAsync(characterSources[type].url));
+    sourcePromises.set(type, loader.loadAsync(characterSources[type].url).catch(error => {
+      sourcePromises.delete(type); // Allow later placements to retry a transient network failure.
+      throw error;
+    }));
   }
   return sourcePromises.get(type);
 }
 
-export function preloadCharacterModels() {
-  for (const type of Object.keys(characterSources)) {
+export function preloadCharacterModels(types = ['sunflower', 'peashooter', 'client']) {
+  for (const type of new Set(types)) {
+    if (!characterSources[type]) continue;
     loadCharacterSource(type).catch((error) => {
       console.warn(`[CharacterModelLoader] ${type} preload failed.`, error);
     });
@@ -89,7 +93,6 @@ async function attachCharacterModel(entity, type, fallbackParts, parent) {
     const scale = characterSources[type].height / Math.max(size.y, 0.001);
     asset.scale.setScalar(scale);
     asset.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
-    console.debug(`[charModel] ${type} rawH=${size.y.toFixed(3)} targetH=${characterSources[type].height} scale=${scale.toFixed(3)} minY=${bounds.min.y.toFixed(3)} ground=${(-bounds.min.y * scale).toFixed(3)}`);
 
     const visual = new THREE.Group();
     visual.name = `${type}-tripo-visual`;

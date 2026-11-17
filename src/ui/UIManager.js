@@ -36,7 +36,7 @@ export class UIManager {
         </div>
         <div class="stat-block stat-health" title="归零则本关失败">
           <span class="stat-label">工位</span>
-          <div id="base-hp-bar-bg"><div id="base-hp-bar"></div></div>
+          <div id="base-hp-bar-bg" role="progressbar" aria-label="工位生命" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="base-hp-bar"></div></div><span id="hp-value">100</span>
         </div>
         <div class="stat-block" id="shield-block" style="display:none">
           <span class="stat-label">盾</span><span class="stat-value" id="shield-value">0</span>
@@ -120,7 +120,7 @@ export class UIManager {
     this.entityFeedback = feedback;
     const guide = document.createElement('div');
     guide.id = 'control-guide';
-    guide.textContent = '拖卡部署 · 拖植物换位 · 拖空地平移 · 滚轮缩放';
+    guide.innerHTML = '<span class="guide-wide">拖卡部署 · 拖植物换位 · 拖空地平移 · 滚轮缩放</span><span class="guide-portrait">横屏更好玩 · 点 + 可放大棋盘</span>';
     root.appendChild(guide);
 
     const cardTooltip = document.createElement('div');
@@ -146,11 +146,33 @@ export class UIManager {
     this.waveBanner = waveBanner;
 
     // 暂停遮罩
-    const pauseOverlay = document.createElement('div');
+    const pauseOverlay = document.createElement('dialog');
     pauseOverlay.id = 'pause-overlay';
-    pauseOverlay.innerHTML = '<div class="pause-text">⏸ 已暂停</div><div class="pause-hint">按 [空格] 或点击暂停按钮继续<br>[1] [2] [3] 切换游戏速度</div>';
+    pauseOverlay.setAttribute('aria-labelledby', 'pause-title');
+    pauseOverlay.innerHTML = `<div class="pause-panel"><span class="pause-symbol" aria-hidden="true">Ⅱ</span><p class="panel-eyebrow">喘口气，防线交给时间</p><h2 id="pause-title">暂时摸个鱼</h2><p>战斗已暂停，你的搭子们正在原地待命。</p><div class="pause-actions"><button type="button" class="primary-button" id="pause-resume">继续值班 <span aria-hidden="true">▶</span></button><button type="button" class="secondary-button" id="pause-settings">游戏设置</button><button type="button" class="secondary-button" id="pause-restart">重新开始本关</button><button type="button" class="text-button" id="pause-menu">返回选关</button></div><small id="pause-note" role="status">按 Esc 或空格也可以继续</small></div>`;
+    pauseOverlay.querySelector('#pause-resume').addEventListener('click', () => this.onResume?.());
+    pauseOverlay.querySelector('#pause-settings').addEventListener('click', () => this.onSettings?.());
+    for (const [id, action, label] of [['restart', () => this.onRestart?.(), '确认重开本关'], ['menu', () => this.onMenu?.(), '确认返回选关']]) {
+      pauseOverlay.querySelector(`#pause-${id}`).addEventListener('click', event => {
+        if (this._pauseConfirm === id) { this._pauseConfirm = null; action(); return; }
+        this._resetPauseConfirm();
+        this._pauseConfirm = id;
+        event.currentTarget.textContent = label;
+        pauseOverlay.querySelector('#pause-note').textContent = '本局尚未完成，离开后需重新开始。再次点击以确认。';
+      });
+    }
+    pauseOverlay.addEventListener('cancel', event => { event.preventDefault(); this.onResume?.(); });
     root.appendChild(pauseOverlay);
     this.pauseOverlay = pauseOverlay;
+
+    const onboarding = document.createElement('aside');
+    onboarding.id = 'onboarding';
+    onboarding.setAttribute('aria-label', '新手部署指引');
+    onboarding.innerHTML = '<span class="onboarding-step"></span><strong></strong><p></p><button type="button" aria-label="关闭新手指引">×</button>';
+    onboarding.querySelector('button').addEventListener('click', () => { onboarding.hidden = true; });
+    onboarding.hidden = true;
+    root.appendChild(onboarding);
+    this.onboarding = onboarding;
 
     // 教程提示框
     const tutorialTip = document.createElement('div');
@@ -162,8 +184,15 @@ export class UIManager {
     // 浮动提示
     const toast = document.createElement('div');
     toast.id = 'toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
     root.appendChild(toast);
     this.toastEl = toast;
+    const boardStatus = document.createElement('div');
+    boardStatus.className = 'sr-only';
+    boardStatus.setAttribute('role', 'status');
+    root.appendChild(boardStatus);
+    this.boardStatus = boardStatus;
 
     // 光标提示
     const hint = document.createElement('div');
@@ -233,8 +262,9 @@ export class UIManager {
     root.appendChild(helpBtn);
 
     // 帮助弹窗
-    const helpOverlay = document.createElement('div');
+    const helpOverlay = document.createElement('dialog');
     helpOverlay.id = 'help-overlay';
+    helpOverlay.setAttribute('aria-label', '游戏说明');
     helpOverlay.className = 'hidden';
     helpOverlay.innerHTML = `
       <div class="help-box">
@@ -262,6 +292,7 @@ export class UIManager {
             <li><b>拖植物换位</b>：抓住场上的植物拖到空格，免费换位；无效位置会留在原位</li>
             <li><b>拖空地平移</b>：左键拖动空地即可移动沙盘；滚轮围绕鼠标位置缩放</li>
             <li><b>[Q][W][E]…</b> 按卡牌角标快速选卡；<b>[Esc] / 右键 / 取消按钮</b> 取消部署</li>
+            <li><b>键盘部署</b>：Tab 聚焦棋盘，方向键选格，按卡牌快捷键选卡，回车部署</li>
             <li>触屏：点选卡牌，按住草地调整位置，松手部署</li>
             <li><b>[空格]</b> 暂停/继续游戏</li>
             <li><b>[1][2][3]</b> 切换游戏速度 1x/2x/3x</li>
@@ -283,6 +314,7 @@ export class UIManager {
     helpOverlay.querySelector('#help-close-btn').addEventListener('click', () => this._toggleHelp());
     helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay) this._toggleHelp(); });
     this.helpOverlay = helpOverlay;
+    helpOverlay.addEventListener('cancel', event => { event.preventDefault(); this._toggleHelp(); });
 
     window.addEventListener('mousemove', (e) => {
       if (this._hammerMode) {
@@ -490,6 +522,7 @@ export class UIManager {
     }
   }
   clearSelection() {
+    this._hideCardTooltip();
     this.selectedCard = null;
     for (const k in this.cardEls) this.cardEls[k].classList.remove('selected');
     for (const k in this.cardEls) this.cardEls[k].setAttribute('aria-pressed', 'false');
@@ -519,6 +552,7 @@ export class UIManager {
   }
   hideEntityFeedback() { this.entityFeedback.classList.remove('show'); }
   hidePlacementFeedback() { if (this.placementCursor) this.placementCursor.className = ''; }
+  announceBoard(text) { if (this.boardStatus.textContent !== text) this.boardStatus.textContent = text; }
   setCardCooldown(type, endTime, duration = 0) { this.cardCooldowns[type] = endTime; this.cardCdTotal[type] = duration; }
   setHammerMode(on) { this._hammerMode = on; document.body.classList.toggle('hammer-mode', on); this.cursorHint.style.display = on ? 'block' : 'none'; }
 
@@ -620,7 +654,60 @@ export class UIManager {
 
   /** 显示暂停遮罩 */
   setPaused(on) {
+    this._resetPauseConfirm();
     this.pauseOverlay.classList.toggle('show', on);
+    if (on && !this.pauseOverlay.open) this.pauseOverlay.showModal();
+    if (!on && this.pauseOverlay.open) this.pauseOverlay.close();
+  }
+
+  _resetPauseConfirm() {
+    this._pauseConfirm = null;
+    this.pauseOverlay.querySelector('#pause-restart').textContent = '重新开始本关';
+    this.pauseOverlay.querySelector('#pause-menu').textContent = '返回选关';
+    this.pauseOverlay.querySelector('#pause-note').textContent = '按 Esc 或空格也可以继续';
+  }
+
+  resetRound() {
+    this.setPaused(false);
+    if (this.helpOverlay.open) { this.helpOverlay.close(); this.helpOverlay.classList.add('hidden'); }
+    this.hideTip(); this.hideNiuEvent(); this._hideCardTooltip();
+    clearTimeout(this._waveBannerTimer); clearTimeout(this._toastTimer);
+    this.waveBanner.classList.remove('show'); this.toastEl.classList.remove('show');
+    this.setBossDarken(false); this.setWeather(false); this.setPoison(false);
+    this.onboarding.hidden = true;
+  }
+
+  showOnboarding(show) { this._onboardingStage = null; this.onboarding.hidden = !show; }
+
+  updateOnboarding(plants) {
+    if (this.onboarding.hidden) return;
+    const hasSunflower = plants.some(plant => plant.type === 'sunflower' && !plant.dead);
+    const hasShooter = plants.some(plant => plant.type === 'peashooter' && !plant.dead);
+    const stage = Math.max(this._onboardingStage ?? 0, hasSunflower ? (hasShooter ? 2 : 1) : 0);
+    if (stage === this._onboardingStage) return;
+    this._onboardingStage = stage;
+    const steps = [
+      ['1 / 3 · 积攒资源', '先请向日葵搭子上岗', '拖一张向日葵卡到空格，每 5 秒生产 25 摸鱼值。建议放在右侧后排。'],
+      ['2 / 3 · 建立防线', '在敌人同行部署 PPT 射手', '攒够 75 摸鱼值，射手会自动攻击左侧同一行的敌人。'],
+      ['3 / 3 · 灵活调度', '防线就绪，自由发挥！', '拖动植物可免费换行支援。长按射手可蓄力，注意每次消耗 40 摸鱼值。'],
+    ];
+    const [step, title, detail] = steps[stage];
+    this.onboarding.querySelector('span').textContent = step;
+    this.onboarding.querySelector('strong').textContent = title;
+    this.onboarding.querySelector('p').textContent = detail;
+  }
+
+  updateSpecialUses(special, used) {
+    if (!special) return;
+    const card = this.cardEls[special.type];
+    if (!card) return;
+    let badge = card.querySelector('.card-uses');
+    if (!badge) { badge = document.createElement('span'); badge.className = 'card-uses'; card.appendChild(badge); }
+    const remaining = Math.max(0, special.limit - used);
+    badge.textContent = `余 ${remaining} 次`;
+    card.classList.toggle('exhausted', remaining === 0);
+    card.setAttribute('aria-disabled', String(remaining === 0));
+    card.setAttribute('aria-label', `${special.name}，本关剩余 ${remaining} 次`);
   }
 
   /** 显示教程提示 */
@@ -665,6 +752,7 @@ export class UIManager {
       else if (c.isTicket) enough = affordMoyu && this._tickets >= c.ticketCost;
       else enough = affordMoyu;
       if (!(this.cardCooldowns[c.type] > now)) el.classList.toggle('disabled', !enough);
+      el.setAttribute('aria-disabled', String(!enough || this.cardCooldowns[c.type] > now || el.classList.contains('exhausted')));
     }
     if (this.modal.classList.contains('show')) {
       const r = Math.max(0, this.niuDecisionEnd - now);
@@ -674,7 +762,13 @@ export class UIManager {
 
   updateResource(v) { document.getElementById('resource-value').textContent = v; this._resourceAfford = v; }
   updateTickets(v) { this.setTickets(v); this._tickets = v; }
-  updateBaseHp(ratio) { document.getElementById('base-hp-bar').style.width = Math.max(0, ratio * 100) + '%'; }
+  updateBaseHp(ratio) {
+    const hp = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+    document.getElementById('base-hp-bar').style.width = hp + '%';
+    document.getElementById('base-hp-bar-bg').setAttribute('aria-valuenow', String(hp));
+    document.getElementById('hp-value').textContent = hp;
+    document.getElementById('base-hp-bar-bg').classList.toggle('critical', hp <= 30);
+  }
   updateEnemyCount(v) { const el = document.getElementById('enemy-count'); if (el) el.textContent = v; }
   updateScore(v) { const el = document.getElementById('score-value'); if (el) el.textContent = v; }
   showStatDelta(targetId, amount, tone = 'gain') {
@@ -746,6 +840,8 @@ export class UIManager {
 
   _toggleHelp() {
     this.helpOverlay.classList.toggle('hidden');
+    if (this.helpOverlay.classList.contains('hidden')) this.helpOverlay.close();
+    else this.helpOverlay.showModal();
     this.onHelpChange?.(!this.helpOverlay.classList.contains('hidden'));
   }
 

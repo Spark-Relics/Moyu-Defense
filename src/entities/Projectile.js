@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from '../utils/disposeObject.js';
 
 /**
  * 弹丸：PPT豌豆射手发射的"Word文档"。
@@ -79,6 +80,7 @@ export class Projectile {
   }
 
   update(dt) {
+    this.previousX = this.mesh.position.x;
     this.mesh.position.x += this.speed * this.dirX * dt;
     this.mesh.rotation.z += dt * 7 * this.dirX;
     const baseY = this.big ? 0.95 : 0.85;
@@ -86,14 +88,9 @@ export class Projectile {
   }
 
   destroy() {
+    if (this.dead) return;
     this.scene.remove(this.mesh);
-    this.mesh.traverse((c) => {
-      if (c.geometry) c.geometry.dispose();
-      if (c.material) {
-        if (c.material.map) c.material.map.dispose();
-        c.material.dispose();
-      }
-    });
+    disposeObject(this.mesh);
     this.dead = true;
   }
 }

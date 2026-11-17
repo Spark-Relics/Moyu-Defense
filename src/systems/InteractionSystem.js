@@ -10,6 +10,11 @@ export class InteractionSystem {
     this._pointer = null;
     this._chargePlant = null;
     this.gestures = new BoardGestures(this);
+    this.keyboardTile = { row: 2, col: 6 };
+    this.keyboardMode = false;
+    game.canvas.addEventListener('keydown', event => this._onBoardKeyDown(event));
+    game.canvas.addEventListener('focus', () => { this.keyboardMode = game.canvas.matches(':focus-visible'); });
+    game.canvas.addEventListener('blur', () => { this.keyboardMode = false; this._clearPlacementPreview(); });
     game.canvas.addEventListener('pointerdown', e => this._onPointerDown(e));
     window.addEventListener('pointermove', e => this._onPointerMove(e));
     window.addEventListener('pointerup', e => this._onPointerUp(e));
@@ -32,6 +37,35 @@ export class InteractionSystem {
     this.mouse.set((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1);
     this.game.camera.updateMatrixWorld();
     this.raycaster.setFromCamera(this.mouse, this.game.camera);
+  }
+
+  _onBoardKeyDown(event) {
+    const g = this.game;
+    if (!g.ui.canInteract() || event.altKey || event.ctrlKey || event.metaKey) return;
+    const directions = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    const direction = directions[event.key];
+    if (!direction && event.key !== 'Enter') return;
+    event.preventDefault();
+    this.keyboardMode = true;
+    if (direction) {
+      this.keyboardTile.row = Math.max(0, Math.min((g.cfg?.ROWS ?? 5) - 1, this.keyboardTile.row + direction[0]));
+      this.keyboardTile.col = Math.max(0, Math.min((g.cfg?.COLS ?? 9) - 1, this.keyboardTile.col + direction[1]));
+    } else if (g.selectedCard) this._tryPlant(this.keyboardTile.row, this.keyboardTile.col);
+    else g.ui.toast('先按卡牌快捷键选卡，再按回车部署');
+  }
+
+  _renderKeyboardTile() {
+    const g = this.game, { row, col } = this.keyboardTile;
+    const cfg = PLANT_TYPES[g.selectedCard];
+    const occupied = g.grid.isOccupied(row, col);
+    const cost = g.items.isUltMoyu() ? 0 : (cfg?.cost ?? 0);
+    const valid = cfg && !occupied && g.clock >= (g.cardCooldowns[g.selectedCard] || 0) && g.resource.canAfford(cost);
+    g.grid.showPlacementPreview(row, col, Boolean(valid), g.selectedCard);
+    const label = `${row + 1} 排 ${col + 1} 列 · ${occupied ? '已有植物' : !cfg ? '按快捷键选卡' : valid ? `${cfg.name}，回车部署` : '冷却中或摸鱼值不足'}`;
+    g.ui.announceBoard?.(label);
+    const point = g.grid.gridToWorld(row, col).project(g.camera);
+    const rect = g.canvas.getBoundingClientRect();
+    g.ui.showPlacementFeedback(rect.left + (point.x + 1) * rect.width / 2, rect.top + (1 - point.y) * rect.height / 2, Boolean(valid), label);
   }
 
   _isBoardPoint(e) {
@@ -69,9 +103,10 @@ export class InteractionSystem {
     return Boolean(ghost);
   }
 
-  _onPointerDown(e) { this.gestures.down(e); }
+  _onPointerDown(e) { this.keyboardMode = false; this.gestures.down(e); }
   _onPointerMove(e) {
     if (e.isPrimary === false) return;
+    this.keyboardMode = false;
     if (this.gestures.active) { this.gestures.move(e); return; }
     if (!this._isBoardPoint(e)) {
       this._pointer = null; this._clearPlacementPreview(); this.game.ui.hideEntityFeedback(); return;
@@ -186,6 +221,7 @@ export class InteractionSystem {
   update() {
     const g = this.game;
     if (!g.ui.canInteract()) { this.reset(); return; }
+    if (this.keyboardMode && !this.gestures.active) { this._renderKeyboardTile(); return; }
     if (this.gestures.render()) return;
     if (!this._pointer || g._orbitActive) return;
     if (this._chargePlant) {
@@ -234,6 +270,7 @@ export class InteractionSystem {
 
   /** 重置蓄力状态(新一局开始时调用) */
   reset(keepPointer = false) {
+    if (!keepPointer) this.keyboardMode = false;
     if (this._chargePlant) { this._chargePlant.charging = false; this._chargePlant.chargeFx = 0; }
     this._chargePlant = null;
     this.gestures.cancel();

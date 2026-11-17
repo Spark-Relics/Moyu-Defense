@@ -5,16 +5,24 @@
 export class AudioSystem {
   constructor() {
     this.audioCtx = null;
+    this.volume = 0;
+    this._lastPlayed = new Map();
   }
 
   ensure() {
+    if (this.volume <= 0) return;
     if (!this.audioCtx) {
       try { this.audioCtx = new (window.AudioContext || window['webkitAudioContext'])(); }
       catch (e) { this.audioCtx = null; }
     }
+    if (this.audioCtx?.state === 'suspended') this.audioCtx.resume().catch(() => {});
   }
 
   play(type) {
+    if (this.volume <= 0) return;
+    const time = performance.now();
+    if (time - (this._lastPlayed.get(type) ?? -Infinity) < 45) return;
+    this._lastPlayed.set(type, time);
     this.ensure();
     if (!this.audioCtx) return;
     const ctx = this.audioCtx;
@@ -39,9 +47,10 @@ export class AudioSystem {
     osc.type = p.wave;
     osc.frequency.setValueAtTime(p.f0, now);
     osc.frequency.exponentialRampToValueAtTime(Math.max(40, p.f1), now + p.dur);
-    gain.gain.setValueAtTime(p.vol, now);
+    gain.gain.setValueAtTime(p.vol * this.volume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + p.dur);
     osc.start(now);
     osc.stop(now + p.dur);
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 }

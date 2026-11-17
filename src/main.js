@@ -1,4 +1,5 @@
 import './style.css';
+import './production.css';
 import * as THREE from 'three';
 
 import { GridSystem } from './systems/GridSystem.js';
@@ -19,6 +20,10 @@ import { preloadCharacterModels } from './systems/CharacterModelLoader.js';
 import { tweenManager } from './utils/Tween.js';
 import { GridDebugger } from './utils/GridDebugger.js';
 import { getBoardOrbitRadius } from './utils/CameraFraming.js';
+import { advanceSimulation } from './utils/Simulation.js';
+import { findProjectileTarget } from './utils/ProjectileCollision.js';
+import { PlayerStorage } from './systems/PlayerStorage.js';
+import { SettingsUI } from './ui/SettingsUI.js';
 
 export const CFG = {
   ROWS: 5, COLS: 9, CELL: 3.00,
@@ -33,8 +38,14 @@ export const CFG = {
 
 class Game {
   constructor() {
-    preloadCharacterModels();
+    let storage;
+    try { storage = window.localStorage; } catch { /* In-memory play remains available. */ }
+    this.storage = new PlayerStorage(storage);
+    this.settings = this.storage.loadSettings();
+    this._accumulator = 0;
+    this._renderDirty = true;
     this.canvas = document.getElementById('game-canvas');
+    this.canvas.tabIndex = -1;
     this.running = false;
     this._contextLost = false;
     this._pausedBeforeContextLoss = false;
@@ -84,6 +95,18 @@ class Game {
     this.levels = new LevelSystem(this);
     this.levelUI = new LevelUI(this.levels);
     this.ui.setLevelUI(this.levelUI);
+    this.settingsUI = new SettingsUI(this.settings, () => {
+      this.storage.saveSettings(this.settings);
+      this._applySettings();
+    }, () => { this.interaction.reset(); this._orbitActive = false; });
+    this.levelUI.onSettings = () => this.settingsUI.show();
+    this.levelUI.onHelp = () => this.ui._toggleHelp();
+    this.ui.onSettings = () => this.settingsUI.show();
+    this.ui.onResume = () => this._togglePause();
+    this.ui.onRestart = () => this.startLevel(this.levels.currentLevelId);
+    this.ui.onMenu = () => this.returnToMenu();
+    this._applySettings();
+    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => this._applySettings());
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('debug')) {
       this.debugger = new GridDebugger(this);
     }
@@ -92,14 +115,25 @@ class Game {
     this.levelUI.onStartLevel = (id) => this.startLevel(id);
     this.levelUI.onNextLevel = (id) => this.startLevel(id);
     this.levelUI.onRetry = () => this.startLevel(this.levels.currentLevelId);
-    this.levelUI.onBackToMenu = () => { this.ui.hideOverlay(); this.levelUI.showMenu(); };
+    this.levelUI.onBackToMenu = () => this.returnToMenu();
 
     // 加载进度，显示选关界面
     this.levels.loadProgress();
     this.ui.hideOverlay();
     this.levelUI.showMenu();
+    document.getElementById('boot-screen')?.remove();
     this.lastT = performance.now();
     this._loop();
+  }
+
+  _applySettings() {
+    const low = this.settings.quality === 'low' || (this.settings.quality === 'auto' && (navigator.hardwareConcurrency <= 4 || matchMedia('(max-width: 700px)').matches));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1 : 2));
+    this.renderer.shadowMap.enabled = !low;
+    this.audio.volume = this.settings.volume;
+    this.reducedMotion = this.settings.reducedMotion ?? matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.body.classList.toggle('reduced-motion', this.reducedMotion);
+    this._renderDirty = true;
   }
 
   _initThree() {
@@ -188,6 +222,7 @@ class Game {
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.isContentEditable) return;
+      if (this.settingsUI?.open) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         if (this.ui.dismissTopOverlay()) return;
@@ -195,7 +230,7 @@ class Game {
         else this._togglePause();
         return;
       }
-      if (e.key === ' ') { e.preventDefault(); this._togglePause(); return; }
+      if (e.key === ' ' && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); this._togglePause(); return; }
       if (!this.running || this.paused || this.ui.isInteractionBlocked()) return;
       const cardType = this.ui.getCardTypeForHotkey(e.key);
       if (cardType) { e.preventDefault(); this._onCardClick(cardType); return; }
@@ -208,6 +243,17 @@ class Game {
     window.addEventListener('blur', () => {
       this._orbitActive = false;
       if (this.running && !this.paused) this._togglePause();
+    });
+    document.addEventListener('visibilitychange', () => {
+      this._accumulator = 0;
+      if (document.hidden) {
+        if (this.running && !this.paused) this._togglePause();
+        cancelAnimationFrame(this._raf);
+        this.audio.audioCtx?.suspend().catch(() => {});
+      } else {
+        this.lastT = performance.now();
+        this._loop();
+      }
     });
   }
 
@@ -290,8 +336,10 @@ class Game {
   }
 
   _togglePause() {
-    if (!this.running || this._contextLost) return;
+    if (!this.running || this._contextLost || this.settingsUI?.open) return;
     this.paused = !this.paused;
+    this._accumulator = 0;
+    if (!this.paused) this.audio.ensure();
     this.interaction?.reset();
     this._orbitActive = false;
     this.ui.setPaused(this.paused);
@@ -328,6 +376,7 @@ class Game {
 
   /** 触发屏幕震动 */
   shake(intensity = 0.3, duration = 0.3) {
+    if (this.reducedMotion) return;
     this._shakeIntensity = Math.max(this._shakeIntensity, intensity);
     this._shakeDuration = Math.max(this._shakeDuration, duration);
   }
@@ -367,6 +416,8 @@ class Game {
     this._toTgtY = p.tgt[1];
     this._toTgtZ = p.tgt[2];
     this._camAnimating = true;
+    if (this.reducedMotion) this._camAnimDur = 0;
+    else this._camAnimDur = 800;
     this._camAnimStart = performance.now();
     this._updateCamButtons();
     this.ui?.toast(`视角: ${p.name}`);
@@ -477,8 +528,12 @@ class Game {
     this._orbitTarget.set(0, 0, 0);
     const halfW = (CFG.COLS / 2 + 1.8) * CFG.CELL;
     const halfD = (CFG.ROWS / 2 + 0.85) * CFG.CELL;
+    const compact = window.innerHeight < 560 && window.innerWidth > 700;
+    if (compact) this.camera.setViewOffset(window.innerWidth, window.innerHeight, -window.innerWidth * .13, 0, window.innerWidth, window.innerHeight);
+    else this.camera.clearViewOffset();
     const radius = getBoardOrbitRadius({ halfWidth: halfW, halfDepth: halfD,
-      phi: this._orbitPhi, fov: this.camera.fov, aspect: this.camera.aspect, height: window.innerHeight });
+      phi: this._orbitPhi, fov: this.camera.fov, aspect: this.camera.aspect, height: window.innerHeight,
+      ...(compact ? { verticalReserve: 150, headroom: 1, safeX: .64 } : {}) });
     this._orbitRadius = radius;
     this.scene.fog = new THREE.Fog(0xdce6df, radius * 2, radius * 5);
     this._orbitMaxRadius = Math.max(120, radius * 1.5);
@@ -503,7 +558,7 @@ class Game {
   /** 更新动画相机 */
   _updateCamera(dt) {
     if (this._camAnimating) {
-      const t = Math.min(1, (performance.now() - this._camAnimStart) / this._camAnimDur);
+      const t = this._camAnimDur === 0 ? 1 : Math.min(1, (performance.now() - this._camAnimStart) / this._camAnimDur);
       const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; // easeInOutCubic
       // 插值轨道参数
       const theta = this._fromTheta + (this._toTheta - this._fromTheta) * ease;
@@ -555,6 +610,7 @@ class Game {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this._fitBoard();
+    this._renderDirty = true;
   }
 
   _onContextLost(event) {
@@ -563,6 +619,7 @@ class Game {
     this._contextLost = true;
     this._pausedBeforeContextLoss = this.paused;
     this.paused = true;
+    this.interaction?.reset();
     this._orbitActive = false;
     this.canvas.style.cursor = '';
     this.ui?.showRendererStatus('显卡连接中断', '正在等待浏览器恢复 3D 画面，游戏进度已安全暂停…');
@@ -574,6 +631,7 @@ class Game {
     this.paused = this._pausedBeforeContextLoss;
     this.ui?.hideRendererStatus();
     this.ui?.setPaused(this.paused);
+    this._syncPauseButton();
     this.ui?.toast('3D 画面已恢复');
     this.lastT = performance.now();
   }
@@ -585,14 +643,13 @@ class Game {
     this.ui.onCardPointerDown = (event, type, card) => this.interaction.gestures.startCard(event, type, card);
     this.ui.onCardCaptureLost = () => { if (this.interaction.gestures.active) this.interaction.reset(); };
     this.ui.onCancelSelection = () => this._cancelActiveTool();
-    this.ui.canInteract = () => this.running && !this.paused && !this._contextLost && !this.ui.isInteractionBlocked();
+    this.ui.canInteract = () => this.running && !this.paused && !this._contextLost && !this.settingsUI?.open && !this.ui.isInteractionBlocked();
     this.ui.isFreePlacement = () => Boolean(this.items?.isUltMoyu());
     this.ui.onHelpChange = (open) => {
       this.interaction?.reset();
       this._orbitActive = false;
       if (open) this.ui._hideCardTooltip();
     };
-    this.ui.pauseOverlay.addEventListener('click', () => this._togglePause());
   }
 
   /** 根据关卡更新可用卡片 */
@@ -709,17 +766,23 @@ class Game {
 
   // ---------- 关卡开始 ----------
   startLevel(levelId) {
+    if (!this.levels.isUnlocked(levelId) || this._contextLost) return;
+    this.finishRound();
     document.body.classList.add('in-game');
     this.levelUI.hideMenu();
     this.audio.ensure();
     this._clearEntities();
     const level = this.levels.startLevel(levelId);
+    preloadCharacterModels([...this.levels.getAvailableCards().map(card => card.type), ...level.waves.flatMap(wave => wave.zombies.map(group => group.type === 'super_traitor' ? 'traitor' : group.type))]);
     this.clock = 0; this.running = true;
+    this.canvas.tabIndex = 0;
     this.baseHp = CFG.BASE_HP;
     this.resource = new ResourceSystem(this.ui, level.startResource);
     this.eventSystem = new EventSystem(this);
     this.items = new ItemSystem(this);
     this._refreshCards(); // 按关卡刷新可用道具
+    this.ui.updateSpecialUses(level.special, 0);
+    this.ui.showOnboarding(level.id === 1);
     this.ui.updateResource(level.startResource);
     this.ui.updateBaseHp(1);
     this.ui.clearSelection(); this.ui.setHammerMode(false);
@@ -742,15 +805,40 @@ class Game {
       btn.setAttribute('aria-pressed', String(s === 1));
     }
     this._fitBoard();
+    this._accumulator = 0;
+    this._shakeDuration = 0; this._shakeIntensity = 0;
     this.killStreak = 0; this.streakTimer = 0; this.totalKills = 0; this.score = 0;
     this._updateKillDisplay();
     this._atkDebuffMul = 1; this._atkDebuffEnd = 0;
     this._atkSpeedMul = 1;  this._atkSpeedEnd = 0;
     this._zombieSlowEnd = 0;
     this.ui.toast(`${level.icon} 第${level.id}关：${level.name}！${level.desc}`);
+    this.ui.update(0, 0);
+  }
+
+  finishRound() {
+    this.running = false;
+    this.canvas.tabIndex = -1;
+    this.paused = false;
+    this._accumulator = 0;
+    this._orbitActive = false;
+    this._cancelActiveTool(false);
+    this.eventSystem?.reset();
+    this.ui.resetRound();
+    this._syncPauseButton();
+    this._renderDirty = true;
+  }
+
+  returnToMenu() {
+    this.finishRound();
+    this._clearEntities();
+    document.body.classList.remove('in-game');
+    document.getElementById('level-result')?.remove();
+    this.levelUI.showMenu();
   }
 
   _clearEntities() {
+    tweenManager.clear();
     for (const p of this.plants) p.destroy(this);
     for (const z of this.zombies) z.destroy(this);
     for (const pr of this.projectiles) pr.destroy();
@@ -765,19 +853,27 @@ class Game {
 
   // ---------- 主循环 ----------
   _loop = () => {
-    requestAnimationFrame(this._loop);
+    if (document.hidden) return;
+    this._raf = requestAnimationFrame(this._loop);
     const now = performance.now();
     let dt = (now - this.lastT) / 1000;
     this.lastT = now;
-    dt = Math.min(dt, 0.05);
     const helpOpen = this.ui.helpOverlay && !this.ui.helpOverlay.classList.contains('hidden');
-    if (this.running && !this.paused && !helpOpen) {
-      const subDt = dt * this.speedMul;
-      this._update(Math.min(subDt, 0.1));
+    const active = this.running && !this.paused && !helpOpen && !this.settingsUI?.open && !this._contextLost;
+    if (active) {
+      this._accumulator = advanceSimulation(this._accumulator, dt, this.speedMul, step => {
+        this._update(step);
+        return this.running;
+      });
+      tweenManager.update(Math.min(dt, 0.05));
+      this.interaction.update();
+    } else {
+      this._accumulator = 0;
     }
-    tweenManager.update(dt);
-    this.interaction.update();
-    if (!this._contextLost) this.renderer.render(this.scene, this.camera);
+    if (!this._contextLost && (active || this._renderDirty)) {
+      this.renderer.render(this.scene, this.camera);
+      this._renderDirty = false;
+    }
   };
 
   _update(dt) {
@@ -793,6 +889,7 @@ class Game {
     this._updateCamera(dt);
     // 关卡系统驱动波次生成与通关判定
     this.levels.update(dt, this);
+    if (!this.running) return;
 
     const slowOn = this.clock < this._zombieSlowEnd;
     for (const z of this.zombies) {
@@ -819,6 +916,7 @@ class Game {
     this.ui.update(dt, this.clock);
     this.ui.updateEnemyCount(this.zombies.filter((z) => !z.dead).length);
     this.ui.updateScore(this.score);
+    this.ui.updateOnboarding(this.plants);
     this._updateStreak(dt);
     this._checkEnd();
   }
@@ -867,15 +965,11 @@ class Game {
     for (const pr of this.projectiles) {
       if (pr.dead) continue;
       pr.update(dt);
-      for (const z of this.zombies) {
-        if (z.dead || z.row !== pr.row) continue;
-        const hitRadius = pr.big ? 0.8 : 0.55;
-        if (Math.abs(z.mesh.position.x - pr.mesh.position.x) < hitRadius) {
-          z.takeDamage(pr.damage);
-          // 审批单弹丸：减速效果 + 抗性衰减
-          if (pr.isApproval) this._applySlow(z, pr.slowMul, pr.slowDuration);
-          pr.destroy(); break;
-        }
+      const target = findProjectileTarget(pr, this.zombies);
+      if (target) {
+        target.takeDamage(pr.damage);
+        if (pr.isApproval) this._applySlow(target, pr.slowMul, pr.slowDuration);
+        pr.destroy();
       }
       if (!pr.dead && (pr.mesh.position.x < this.grid.getSpawnX() - 4 || pr.mesh.position.x > this.grid.getBaseX() + 4)) pr.destroy();
     }
@@ -951,8 +1045,7 @@ class Game {
   killWeakestZombies(n) {
     const alive = this.zombies.filter((z) => !z.dead).sort((a, b) => a.hp - b.hp);
     for (let i = 0; i < Math.min(n, alive.length); i++) {
-      alive[i].dead = true;
-      this.particles.spawnDeath(this.grid.group, alive[i].mesh.position.clone());
+      alive[i].takeDamage(alive[i].hp);
     }
   }
 
@@ -1032,7 +1125,6 @@ class Game {
   _checkEnd() {
     if (!this.running) return;
     if (this.baseHp <= 0) {
-      this.running = false;
       this.levels.onLevelFail(this);
     }
     // 通关判定由 LevelSystem.update 在所有波次清完后触发
